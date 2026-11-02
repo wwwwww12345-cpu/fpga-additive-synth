@@ -1,0 +1,97 @@
+//=============================================================================
+// top_ble_fsr.cst —— 小程序单音 + **板上 FSR 力度** 专用引脚约束
+//
+// 照抄 rtl/top_ble_echo.cst（同一套 RTL 端口），只删掉无 IO_LOC 的 key_ready_out。
+// 与 top_ble_echo.cst 的唯一区别是**说明**：本版 FSR/ADS1115 是"必须接"，
+// 不再是占位保留脚（力度来自 AIN0，见 rtl/top_ble_fsr.v 的 [FSR-1..3]）。
+//
+// ---------------------------------------------------------------------------
+// 接线清单
+//   必须:
+//     蓝牙 HC-04 : 模块 TX  -> 开发板 G2   (uart_ble_rx)
+//                  模块 RX  <- 开发板 G1   (uart_ble_tx)
+//                  模块 GND -- 开发板 GND  (必须共地, 否则收不到/乱码)
+//     ADS1115(FSR): SCL -> F1   SDA -> A1   VDD->3V3  GND->GND  ADDR->GND(0x48)
+//                   FSR402 分压: 3V3 -- FSR402 --+-- AIN0, 10k 下拉到 GND
+//     clk    E2  : 板载 50MHz 晶振, 不用接线
+//     btn_rst H11: 板载 USER_KEY, 按一下=复位
+//   需要出声:
+//     PCM5102    : SCK <- G5 ; BCK <- G8 ; LRCK <- J5 ; DIN <- H7
+//                  模块 VIN <- 3V3 ; GND -- 开发板 GND
+//   可选:
+//     OLED       : SCK L5 / MOSI K5 / DC L11 / RES K11 (SSD1306/SH1106, 相图)
+//     灯条 DIN   : C2 (WS2812, 5V 独立供电并与开发板共地)
+//
+//   ★ 本固件**不需要**: 板载串口 B3/C3(仅保留脚)、并行键口(PMOD)、TTP229 触摸键盘、K4 跳线。
+//
+// ---------------------------------------------------------------------------
+// IO 电平: 3.3V LVCMOS33, 与官方 40 脚表一致(照抄 top.cst 的同名脚设置)
+//=============================================================================
+
+// ---- 时钟 / 复位 ----
+IO_LOC "clk" E2;
+IO_LOC "btn_rst" H11;                       // 底板 USER_KEY, 高=按下
+
+// ---- 蓝牙串口(HC-04) ----
+IO_LOC "uart_ble_rx" G2;                    // HC-04 TX -> FPGA
+IO_LOC "uart_ble_tx" G1;                    // FPGA -> HC-04 RX
+IO_LOC "uart_pc_rx" B3;                     // 板载调试器串口(可选, 不接也行)
+
+// ---- 灯条 ----
+IO_LOC "led_din"   C2;                        // WS2812 DIN
+
+// ---- I2S -> PCM5102 ----
+IO_LOC "dac_sck"   G5;                        // PCM5102 SCK, RTL 恒 0 = 内部 PLL
+IO_LOC "i2s_bclk"  G8;                       // -> 模块 BCK
+IO_LOC "i2s_lrck"  J5;                       // -> 模块 LRCK
+IO_LOC "i2s_sdata" H7;                      // -> 模块 DIN
+
+// ---- FSR 力度 (ADS1115) + 保留脚 ----
+IO_LOC "btn_test" K4;
+IO_LOC "i2c_scl" F1;                         // 本版必须接(力度来源)
+IO_LOC "i2c_sda" A1;
+
+// ---- IO 电平/上下拉(照抄 top.cst 同名脚) ----
+IO_PORT "clk" IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_PORT "btn_rst" IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_PORT "btn_test" IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_PORT "led_din" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "uart_pc_rx" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_PORT "uart_ble_rx" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;   // 未接时空闲高, 免假起始位
+IO_PORT "uart_ble_tx" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "dac_sck" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "i2s_bclk" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "i2s_lrck" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "i2s_sdata" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "i2c_scl" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_PORT "i2c_sda" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// ---- OLED (PLACEHOLDER pins: change these when real wiring is decided) ----
+// SCK->L5  MOSI->K5  DC->J5  CS->C2 ; RES is not driven (tie to 3.3V)
+IO_LOC "oled_sck"  L5;
+IO_LOC "oled_mosi" K5;
+IO_LOC "oled_dc"   L11;
+IO_LOC "oled_rst"  K11;             // OLED RES (FPGA driven)
+IO_PORT "oled_sck"  IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "oled_mosi" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "oled_dc"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "oled_rst"  IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+// ---- 4x4 矩阵键盘（2026-11-02 加进全功能固件；照抄 top_keymatrix.cst）----
+//   行: H1 K7 L7 L10 (逐行拉低, 低有效, DRIVE=8)
+//   列: L9 J8 F7 J11 (**上拉**, 低=按下; 建议外部再并 10k)
+IO_LOC "km_row[0]" H1;
+IO_LOC "km_row[1]" K7;
+IO_LOC "km_row[2]" L7;
+IO_LOC "km_row[3]" L10;
+IO_LOC "km_col[0]" L9;
+IO_LOC "km_col[1]" J8;
+IO_LOC "km_col[2]" F7;
+IO_LOC "km_col[3]" J11;
+IO_PORT "km_row[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "km_row[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "km_row[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "km_row[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "km_col[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_PORT "km_col[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_PORT "km_col[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_PORT "km_col[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;

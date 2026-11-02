@@ -1,0 +1,111 @@
+/* 弹琴页（横屏）：暗色底 + 两个八度真实琴键
+ * 横屏时 rpx 的基准是长边（750rpx = 屏幕长边），所以 14 个白键天然铺满整屏，
+ * 一键约 54rpx 宽、整块琴键高度 = 除顶条外的全部高度，手指够得着。
+ */
+page {
+  height: 100vh;
+  overflow: hidden;
+  background: #0b0d12;
+}
+
+.page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0b0d12;
+  /* 横屏刘海/圆角区域留白（iPhone 左右两侧） */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  box-sizing: border-box;
+}
+
+/* ---------- 顶部一条 ---------- */
+.bar {
+  display: flex; align-items: center; gap: 16rpx;
+  padding: 10rpx 24rpx;
+  background: #151a22;
+  flex: none;
+}
+.dot { width: 14rpx; height: 14rpx; border-radius: 50%; background: #e5484d; flex: none; }
+.dot.on { background: #30a46c; }
+
+.info { flex: 1; min-width: 0; }
+.devname {
+  font-size: 24rpx; color: #e8eaee; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.devsub {
+  font-size: 20rpx; color: #7d8794;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.frame { font-size: 22rpx; color: #9fb3ca; font-family: monospace; flex: none; }
+.ack { font-size: 22rpx; color: #4cc38a; flex: none; }
+
+.ping {
+  flex: none;
+  font-size: 20rpx; color: #9fb3ca; font-family: monospace;
+  padding: 4rpx 14rpx; border: 1px solid #2c3542; border-radius: 999rpx;
+}
+.ping:active { background: #232b36; }
+
+.cbtn {
+  flex: none;
+  background: #2a3340; color: #dbe3ee; border-radius: 999rpx;
+  font-size: 22rpx; line-height: 48rpx; padding: 0 26rpx; margin: 0;
+}
+.cbtn.on { background: #1c3a2d; color: #7fe3b0; }
+
+/* ---------- 扫描列表（横屏只占两行，别把琴键挤没） ---------- */
+.devlist {
+  background: #151a22; border-top: 1px solid #1f2732;
+  display: flex; flex-wrap: wrap; flex: none;
+  max-height: 120rpx; overflow: hidden;
+}
+.devitem {
+  display: flex; align-items: center; gap: 16rpx;
+  padding: 10rpx 24rpx; border-right: 1px solid #1b222c;
+}
+.devitem:active { background: #1b222c; }
+.devitemname { font-size: 22rpx; color: #dbe3ee; }
+.devitemrssi { font-size: 20rpx; color: #6d7683; font-family: monospace; }
+
+/* ---------- 琴键 ---------- */
+.kbd {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: #0b0d12;
+}
+.whites { display: flex; height: 100%; width: 100%; }
+.wkey {
+  flex: 1;
+  position: relative;
+  background: linear-gradient(#ffffff, #eef1f5);
+  border-right: 2rpx solid #22262d;
+  border-radius: 0 0 8rpx 8rpx;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 16rpx;
+  box-sizing: border-box;
+}
+.wkey:last-child { border-right: none; }
+.wkey.on { background: linear-gradient(#d3e4fb, #a8c8ee); }
+
+.bkey {
+  position: absolute; top: 0;
+  width: 34rpx; height: 62%;
+  background: linear-gradient(#3b414a, #0c0e12);
+  border-radius: 0 0 10rpx 10rpx;
+  box-shadow: 0 6rpx 14rpx rgba(0, 0, 0, 0.6);
+  z-index: 2;
+}
+.bkey.on { background: linear-gradient(#5c80a8, #2d4360); }
+
+/* ---------- 底部提示（只在没连上时出现，横屏下也很矮） ---------- */
+.foot {
+  flex: none;
+  padding: 6rpx 24rpx;
+  background: #151a22;
+  font-size: 20rpx; color: #7d8794;
+  text-align: center;
+}

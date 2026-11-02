@@ -1,0 +1,40 @@
+# ---- 构建/综合产物（可重建，不入库）----
+impl/
+*.fs
+*.bin
+*.bit
+*.vg
+*.pvs
+*.sr
+
+# ---- 环境（可重建）----
+.venv/
+__pycache__/
+*.pyc
+.idea/
+.dsh/
+.dsh-im/
+.dsh-uploads/
+.dsh-vision-toolkit/
+.backup/
+
+# ---- 音频素材与私人录音：一律不入库 ----
+*.aiff
+*.aif
+*.aifc
+*.wav
+*.m4a
+*.mp4
+
+# ---- 压缩包（用 Release/网盘分发）----
+*.zip
+*.7z
+*.rar
+
+# ---- 生表中间产物 ----
+tools/staging/
+
+# ---- 系统垃圾 ----
+Thumbs.db
+.DS_Store
+desktop.ini

@@ -1,0 +1,83 @@
+.conn {
+  display: flex; align-items: center; gap: 12px;
+  margin: 24rpx; padding: 20rpx 24rpx;
+  background: #fff; border-radius: 24rpx;
+}
+.dot { width: 16rpx; height: 16rpx; border-radius: 50%; background: #e5484d; flex: none; }
+.dot.on { background: #30a46c; }
+.conninfo { flex: 1; min-width: 0; }
+.devname { font-size: 30rpx; font-weight: 500; }
+.devsub { font-size: 24rpx; color: #999; font-family: monospace; }
+.cbtn { background: #1a1a1a; color: #fff; border-radius: 16rpx; font-size: 26rpx; }
+.cbtn.off { background: #fff; color: #1a1a1a; border: 1px solid #ddd; }
+
+.devlist { margin: 0 24rpx 24rpx; background: #fff; border-radius: 24rpx; padding: 8rpx 0; }
+.devtitle { font-size: 24rpx; color: #999; padding: 12rpx 24rpx 4rpx; }
+.devitem { display: flex; justify-content: space-between; align-items: center; padding: 18rpx 24rpx; }
+.devitem:active { background: #f0f0f0; }
+.devitemname { font-size: 28rpx; }
+.devitemrssi { font-size: 22rpx; color: #aaa; font-family: monospace; }
+
+/* ---- 卡片 ---- */
+.card {
+  margin: 0 24rpx 24rpx; padding: 24rpx;
+  background: #fff; border-radius: 24rpx;
+}
+.cardtitle { font-size: 30rpx; font-weight: 500; margin-bottom: 20rpx; }
+.cardsub { font-size: 24rpx; color: #888; font-weight: 400; margin-left: 12rpx; }
+.tip { font-size: 22rpx; color: #aaa; margin-top: 16rpx; line-height: 1.5; }
+
+/* ---- 按钮行 ---- */
+.rowbtns { display: flex; flex-wrap: wrap; gap: 16rpx; }
+.obtn {
+  background: #f2f3f5; color: #1a1a1a; border-radius: 16rpx;
+  font-size: 26rpx; margin: 0; padding-left: 28rpx; padding-right: 28rpx;
+  flex: 1; min-width: 140rpx; line-height: 2.4;
+}
+.obtn.warn { background: #fff4e3; color: #b25e09; }
+.obtn.main { background: #1a1a1a; color: #fff; }
+.obtn[disabled] { color: #bbb; background: #f7f7f7; }
+.obtn.main[disabled] { color: #888; background: #d8d8d8; }
+
+/* ---- 和弦 ---- */
+.chordrow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16rpx; }
+.chordlabel { font-size: 28rpx; font-weight: 500; }
+.chordtypes { display: flex; gap: 16rpx; }
+.ctype {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8rpx;
+  background: #f2f3f5; border-radius: 16rpx; padding: 16rpx 0; font-size: 26rpx;
+}
+.ctype.sel { background: #1a1a1a; color: #fff; }
+.ctype.dim { opacity: 0.45; }
+
+/* ---- 曲谱 ---- */
+.songrow { display: flex; gap: 16rpx; align-items: center; margin-bottom: 8rpx; }
+.songpicker { flex: 1; min-width: 0; }
+.pickerview {
+  background: #f2f3f5; border-radius: 16rpx; padding: 16rpx 20rpx;
+  font-size: 26rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.progress { font-size: 24rpx; color: #b25e09; margin: 12rpx 0; font-family: monospace; }
+.progress.warn { color: #c02532; }
+.rowbtns.play { margin-top: 16rpx; }
+.tolib { display: block; font-size: 24rpx; color: #666; margin-top: 20rpx; }
+
+/* ---- 调试 ---- */
+.todemo { display: flex; align-items: center; justify-content: center; }
+
+/* ---- 日志 ---- */
+.logtitle { font-size: 24rpx; color: #999; padding: 0 24rpx 8rpx; display: flex; justify-content: space-between; }
+.clearbtn { color: #1a1a1a; font-weight: 500; padding: 0 12rpx; }
+.log {
+  margin: 0 24rpx 24rpx; background: #fff; border-radius: 24rpx;
+  padding: 16rpx 20rpx; height: 400rpx;
+  font-family: monospace; font-size: 22rpx; color: #666;
+}
+.logline { display: flex; gap: 8rpx; padding: 2rpx 0; line-height: 1.5; }
+.lt { color: #bbb; flex: none; }
+.ld { flex: none; width: 1.5em; }
+.lh { color: #555; flex: none; max-width: 40%; word-break: break-all; }
+.ln { color: #999; word-break: break-all; }
+.logline.tx .ld, .logline.tx .lh { color: #1a1a1a; }
+.logline.rx .ld, .logline.rx .lh { color: #30a46c; }
+.logline.err .ld, .logline.err .lh, .logline.err .ln { color: #e5484d; }

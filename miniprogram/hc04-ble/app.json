@@ -1,0 +1,16 @@
+{
+  "pages": ["pages/index/index", "pages/songs/songs", "pages/demo/demo"],
+  "window": {
+    "navigationBarTitleText": "FPGA 乐器控制台",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#ffffff"
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于搜索附近的 HC-04 蓝牙设备"
+    }
+  },
+  "requiredPrivateInfos": ["getLocation"],
+  "sitemapLocation": "sitemap.json"
+}

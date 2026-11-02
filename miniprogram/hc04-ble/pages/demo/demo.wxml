@@ -1,0 +1,43 @@
+<view class="page">
+
+  <!-- 顶部一条：连接状态 + 最后一帧 + PING + 连接/断开（横屏下只占一条，剩下的全给琴键） -->
+  <view class="bar">
+    <view class="dot {{connected ? 'on' : ''}}"></view>
+    <view class="info">
+      <view class="devname">{{deviceName}}</view>
+      <view class="devsub">{{deviceSub}}</view>
+    </view>
+    <view class="frame">{{lastText}}</view>
+    <view class="ack">{{ackText}}</view>
+    <view class="ping" wx:if="{{connected}}" bindtap="onPing">PING</view>
+    <button class="cbtn {{connected ? 'on' : ''}}" size="mini" bindtap="onConnectTap" loading="{{connecting}}">
+      {{connected ? '断开' : '连接'}}
+    </button>
+  </view>
+
+  <!-- 扫描结果 -->
+  <view class="devlist" wx:if="{{devices.length}}">
+    <view class="devitem" wx:for="{{devices}}" wx:key="deviceId"
+          data-id="{{item.deviceId}}" bindtap="onDeviceTap">
+      <view class="devitemname">{{item.name || '(无名设备)'}}</view>
+      <view class="devitemrssi">{{item.rssi}} dBm</view>
+    </view>
+  </view>
+
+  <!-- 两个八度琴键：14 白键等分 750rpx，黑键绝对定位 |
+       按下 = 0x87 note vel，松开 = 0x88 note。
+       事件挂在整块键盘上（catch 是为了不让页面跟着手指滚动），靠坐标命中按键 → 支持滑弦。 -->
+  <view class="kbd" catchtouchstart="onKbdStart" catchtouchmove="onKbdMove"
+        catchtouchend="onKbdEnd" catchtouchcancel="onKbdEnd">
+    <view class="whites">
+      <view class="wkey {{item.on ? 'on' : ''}}" wx:for="{{whites}}" wx:key="note"
+            data-note="{{item.note}}"></view>
+    </view>
+    <view class="bkey {{item.on ? 'on' : ''}}" wx:for="{{blacks}}" wx:key="note"
+          style="left:{{item.left}}rpx"
+          data-note="{{item.note}}"></view>
+  </view>
+
+  <view class="foot" wx:if="{{!connected}}">未连接蓝牙时按键不发声（FPGA 收不到帧）</view>
+
+</view>

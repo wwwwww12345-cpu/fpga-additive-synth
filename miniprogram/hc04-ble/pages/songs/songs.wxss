@@ -1,0 +1,55 @@
+.headbtns { display: flex; gap: 16rpx; padding: 24rpx; }
+.obtn {
+  background: #f2f3f5; color: #1a1a1a; border-radius: 16rpx;
+  font-size: 26rpx; margin: 0; flex: 1; line-height: 2.4;
+}
+.obtn.main { background: #1a1a1a; color: #fff; }
+
+.card { margin: 0 24rpx 24rpx; padding: 24rpx; background: #fff; border-radius: 24rpx; }
+.cardtitle { font-size: 30rpx; font-weight: 500; margin-bottom: 20rpx; }
+.cardsub { font-size: 24rpx; color: #888; font-weight: 400; margin-left: 12rpx; }
+.empty { font-size: 24rpx; color: #aaa; line-height: 1.6; padding: 8rpx 0; }
+.tip { font-size: 22rpx; color: #aaa; margin: 8rpx 0 16rpx; line-height: 1.5; }
+
+/* 列表 */
+.songcard { padding: 20rpx 24rpx; }
+.songinfo { display: flex; justify-content: space-between; align-items: baseline; }
+.songname { font-size: 28rpx; font-weight: 500; }
+.songcount { font-size: 22rpx; color: #aaa; font-family: monospace; }
+.songops { display: flex; gap: 32rpx; margin-top: 12rpx; }
+.op { font-size: 24rpx; color: #555; padding: 4rpx 0; }
+.op.del { color: #e5484d; }
+
+/* 编辑器 */
+.lbl { font-size: 24rpx; color: #888; margin: 20rpx 0 8rpx; }
+.txt { background: #f2f3f5; border-radius: 16rpx; padding: 16rpx 20rpx; font-size: 28rpx; }
+.addrow { display: flex; gap: 12rpx; align-items: center; }
+.num {
+  flex: 1; background: #f2f3f5; border-radius: 12rpx; padding: 12rpx 16rpx;
+  font-size: 26rpx; text-align: center; font-family: monospace;
+}
+.addbtn { flex: none; width: 72rpx; }
+
+.entryrow {
+  display: flex; align-items: center; gap: 8rpx; padding: 10rpx 0;
+  font-size: 24rpx; font-family: monospace; border-bottom: 1px solid #f4f4f4;
+}
+.entryhead { color: #aaa; border-bottom: 1px solid #eee; }
+.c-i { width: 64rpx; color: #bbb; }
+.c-n { flex: 1; }
+.c-n.rest { color: #b25e09; }
+.c-v { flex: 1; }
+.c-d { flex: 2; }
+.c-x { width: 56rpx; text-align: center; }
+.c-x.del { color: #e5484d; font-size: 28rpx; }
+
+/* 导入 */
+.ta {
+  width: 100%; box-sizing: border-box; height: 400rpx;
+  background: #f2f3f5; border-radius: 16rpx; padding: 20rpx;
+  font-size: 24rpx; font-family: monospace; margin-top: 8rpx;
+}
+.okbox { margin-top: 20rpx; padding: 16rpx 20rpx; border-radius: 12rpx; background: #e9f7ef; color: #1c7c4a; font-size: 24rpx; }
+.errbox { margin-top: 20rpx; padding: 16rpx 20rpx; border-radius: 12rpx; background: #fdebec; }
+.errtitle { color: #c02532; font-size: 24rpx; font-weight: 500; margin-bottom: 8rpx; }
+.errline { color: #c02532; font-size: 22rpx; line-height: 1.6; }

@@ -1,0 +1,17 @@
+// viz_led song (tools/gen_song.py): word={gate,note[6:0],dur[7:0]}
+// 14 entries + end mark; melody: C4:1 C4:1 G4:1 G4:1 A4:1 A4:1 G4:2 F4:1 F4:1 E4:1 E4:1 D4:1 D4:1 C4:2
+BC01
+BC01
+C301
+C301
+C501
+C501
+C302
+C101
+C101
+C001
+C001
+BE01
+BE01
+BC02
+0000

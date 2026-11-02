@@ -1,0 +1,78 @@
+<!-- ================= 列表视图 ================= -->
+<view wx:if="{{mode === 'list'}}">
+  <view class="headbtns">
+    <button class="obtn main" bindtap="toNew">＋ 新建曲谱</button>
+    <button class="obtn" bindtap="toImport">导入 JSON</button>
+  </view>
+
+  <view class="card" wx:if="{{!list.length}}">
+    <view class="empty">曲谱库为空。可新建、导入 JSON（电脑端 MID→JSON 转换器的产物，格式见 docs/sample_song.json），或用内置示例。</view>
+  </view>
+
+  <view class="card songcard" wx:for="{{list}}" wx:key="id">
+    <view class="songinfo">
+      <view class="songname">{{item.name}}</view>
+      <view class="songcount">{{item.count}} 条</view>
+    </view>
+    <view class="songops">
+      <text class="op" data-id="{{item.id}}" bindtap="onEdit">编辑</text>
+      <text class="op" data-id="{{item.id}}" bindtap="onRename">重命名</text>
+      <text class="op del" data-id="{{item.id}}" bindtap="onDelete">删除</text>
+    </view>
+  </view>
+
+  <view class="tip">条目字段：note 0~127（0=休止）· vel 1~127 · dur 1~127（单位 10ms，长音用连续同音条目拼接）。单曲上限 512 条。</view>
+</view>
+
+<!-- ================= 编辑器视图 ================= -->
+<view wx:if="{{mode === 'edit'}}">
+  <view class="card">
+    <view class="cardtitle">{{editId ? '编辑曲谱' : '新建曲谱'}}</view>
+    <view class="lbl">曲名</view>
+    <input class="txt" placeholder="曲名（≤32 字符）" value="{{editName}}" bindinput="onNameInput" />
+    <view class="lbl">新增条目（note / vel / dur）</view>
+    <view class="addrow">
+      <input class="num" type="number" value="{{eNote}}" bindinput="onNoteInput" placeholder="音号" />
+      <input class="num" type="number" value="{{eVel}}" bindinput="onVelInput" placeholder="力度" />
+      <input class="num" type="number" value="{{eDur}}" bindinput="onDurInput" placeholder="时值" />
+      <button class="obtn main addbtn" size="mini" bindtap="onAddEntry">＋</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="cardtitle">条目列表 <text class="cardsub">{{entries.length}}/{{512}}</text></view>
+    <view class="entryhead entryrow"><text class="c-i">#</text><text class="c-n">note</text><text class="c-v">vel</text><text class="c-d">dur(ms)</text><text class="c-x"></text></view>
+    <view class="entryrow" wx:for="{{entries}}" wx:key="index">
+      <text class="c-i">{{index + 1}}</text>
+      <text class="c-n {{item.note === 0 ? 'rest' : ''}}">{{item.note === 0 ? '休止' : item.note}}</text>
+      <text class="c-v">{{item.vel}}</text>
+      <text class="c-d">{{item.dur}}（{{item.dur * 10}}ms）</text>
+      <text class="c-x del" data-index="{{index}}" bindtap="onDelEntry">✕</text>
+    </view>
+    <view class="empty" wx:if="{{!entries.length}}">还没有条目，在上方填好 note/vel/dur 后点 ＋。</view>
+  </view>
+
+  <view class="headbtns">
+    <button class="obtn main" bindtap="onSave">保存</button>
+    <button class="obtn" bindtap="toList">取消</button>
+  </view>
+</view>
+
+<!-- ================= 导入视图 ================= -->
+<view wx:if="{{mode === 'import'}}">
+  <view class="card">
+    <view class="cardtitle">导入 JSON</view>
+    <view class="tip">粘贴电脑端 MID→JSON 转换器产出的内容。格式：{"name": "...", "entries": [{"note": 60, "vel": 96, "dur": 50}, ...]}，示例见 docs/sample_song.json。与现有曲谱重名会自动加后缀。</view>
+    <textarea class="ta" value="{{importText}}" bindinput="onImportInput" maxlength="-1"
+              placeholder='{"name": "小星星", "entries": [{"note": 60, "vel": 96, "dur": 50}]}' />
+    <view class="headbtns">
+      <button class="obtn main" bindtap="onImport">解析并导入</button>
+      <button class="obtn" bindtap="toList">取消</button>
+    </view>
+    <view class="okbox" wx:if="{{importOk}}">{{importOk}}</view>
+    <view class="errbox" wx:if="{{importErrors}}">
+      <view class="errtitle">导入失败（{{importErrors.length}} 处问题）：</view>
+      <view class="errline" wx:for="{{importErrors}}" wx:key="index">· {{item}}</view>
+    </view>
+  </view>
+</view>

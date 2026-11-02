@@ -1,0 +1,41 @@
+﻿# 仿真记录（2026-11-03，打包内容自检）
+# ModelSim ASE 10.5b; vlog -sv; 工作目录 D:\code_pkg_sim2（纯 ASCII）
+
+## 编译
+vlog -sv: 44 个文件全部编译通过，0 error
+
+## 运行
+### tb_ble_e2e
+# === ALL CHECK PASSED === (52 checks)
+# Errors: 0, Warnings: 7
+
+### tb_ble_cmd_proto
+# === ALL CHECK PASSED === (36 checks)
+# Errors: 0, Warnings: 10
+
+### tb_ble_fsr_vel
+# === BFSV: ALL PASS (10 checks) ===
+# Errors: 0, Warnings: 6
+
+### tb_fsr_key
+# ==== ALL PASS (10 checks) ====
+# Errors: 0, Warnings: 0
+
+### tb_note_ctrl
+# Errors: 0, Warnings: 4
+
+### tb_partial_engine
+# Errors: 0, Warnings: 5
+
+### tb_partial_engine_bitref
+# PENG: ALL PASS (bit-exact, 4096 samples, 0 mismatch)
+# Errors: 0, Warnings: 0
+
+### tb_gtr_body_lead_bitref
+# GTRBODY: ALL PASS (bit-exact, 2050 samples)
+# Errors: 0, Warnings: 0
+
+### tb_led_guide
+# === ALL CHECK PASSED === (13 checks)
+# Errors: 0, Warnings: 0
+
