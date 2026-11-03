@@ -15,7 +15,7 @@ var proto = require('./protocol.js')
 
 var STORAGE_KEY = 'songs_v1'
 var VER_KEY = 'songs_builtin_ver'   // 已并入的内置曲版本（用于给老用户补新增内置曲）
-var BUILTIN_VER = 2                 // 每次改 BUILTIN 列表就 +1
+var BUILTIN_VER = 3                 // 每次改 BUILTIN 列表就 +1（v3: Love Song 按 2in1 谱修正）
 
 // ---------------- 内置示例曲（首次启动时装入） ----------------
 
@@ -64,75 +64,43 @@ var BUILTIN = [
     // 来源：用户提供的 1=C 4/4 ♩=100 简谱（移动端截图），按 1=C4 展开，四分音符=60(600ms)
     name: 'Love Song（方大同·片段）',
     entries: [
-      // —— 我写了这首歌，是一首简单的，不复杂 ——
-      { note: 0, vel: 96, dur: 60 }, { note: 72, vel: 96, dur: 60 },
-      { note: 71, vel: 96, dur: 60 }, { note: 69, vel: 96, dur: 60 },
-      { note: 67, vel: 96, dur: 60 }, { note: 64, vel: 96, dur: 60 },
-      { note: 62, vel: 96, dur: 60 }, { note: 0, vel: 96, dur: 60 },
-      { note: 0, vel: 96, dur: 60 }, { note: 60, vel: 96, dur: 60 },
-      { note: 60, vel: 96, dur: 60 }, { note: 62, vel: 96, dur: 60 },
-      { note: 64, vel: 96, dur: 60 }, { note: 67, vel: 96, dur: 60 },
-      { note: 67, vel: 96, dur: 60 }, { note: 0, vel: 96, dur: 60 },
-      { note: 0, vel: 96, dur: 60 }, { note: 72, vel: 96, dur: 60 },
-      { note: 71, vel: 96, dur: 60 }, { note: 69, vel: 96, dur: 60 },
-      // —— 也不难唱的那一种歌 ——
-      { note: 67, vel: 96, dur: 60 }, { note: 64, vel: 96, dur: 60 },
-      { note: 62, vel: 96, dur: 60 }, { note: 60, vel: 96, dur: 60 },
-      { note: 60, vel: 96, dur: 60 }, { note: 62, vel: 96, dur: 60 },
-      { note: 64, vel: 96, dur: 60 }, { note: 60, vel: 96, dur: 60 },
-      // —— 这不是那种只剩下那钢琴的歌 ——
-      { note: 60, vel: 96, dur: 60 }, { note: 0, vel: 96, dur: 30 },
-      { note: 69, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      { note: 67, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 },
-      { note: 64, vel: 96, dur: 30 },
-      { note: 67, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      { note: 72, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      { note: 69, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 },
-      { note: 64, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 },
-      // —— 也不是那种 ——
-      { note: 67, vel: 96, dur: 30 }, { note: 0, vel: 96, dur: 30 },
-      { note: 0, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      { note: 69, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 },
-      { note: 67, vel: 96, dur: 30 }, { note: 64, vel: 96, dur: 30 },
-      // —— 不能只是朋友的歌 ——
-      { note: 65, vel: 96, dur: 30 }, { note: 65, vel: 96, dur: 30 },
-      { note: 65, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 },
-      { note: 64, vel: 96, dur: 30 }, { note: 62, vel: 96, dur: 30 },
-      { note: 60, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 },
-      // —— 这不是那种 ——
-      { note: 67, vel: 96, dur: 30 }, { note: 0, vel: 96, dur: 30 },
-      { note: 0, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 },
-      { note: 67, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      { note: 60, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      // —— 两个人的故事写在一本小说那 ——
-      { note: 76, vel: 96, dur: 30 }, { note: 76, vel: 96, dur: 30 },
-      { note: 72, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 30 },
-      { note: 69, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      { note: 76, vel: 96, dur: 30 }, { note: 76, vel: 96, dur: 30 },
-      { note: 74, vel: 96, dur: 30 }, { note: 74, vel: 96, dur: 30 },
-      { note: 71, vel: 96, dur: 60 }, { note: 67, vel: 96, dur: 90 },
-      { note: 67, vel: 96, dur: 30 },
-      // —— 小说里有谁会在花田里犯了错，这就 ——
-      { note: 67, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      { note: 72, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      { note: 72, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      { note: 72, vel: 96, dur: 30 }, { note: 74, vel: 96, dur: 30 },
-      { note: 74, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 30 },
-      { note: 72, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
-      { note: 72, vel: 96, dur: 60 },
-      { note: 72, vel: 96, dur: 30 }, { note: 74, vel: 96, dur: 30 },
-      // —— 是一首写给你听的 ——
-      { note: 75, vel: 96, dur: 60 }, { note: 75, vel: 96, dur: 30 },
-      { note: 72, vel: 96, dur: 30 }, { note: 70, vel: 96, dur: 60 },
-      { note: 67, vel: 96, dur: 30 }, { note: 65, vel: 96, dur: 30 },
-      { note: 64, vel: 96, dur: 60 }, { note: 67, vel: 96, dur: 60 },
-      { note: 69, vel: 96, dur: 60 }, { note: 72, vel: 96, dur: 60 },
-      // —— Love Song（第一次出现），一直想写一首 ——
-      // 5̇ = 高音 sol = G5(79)；3̇ = 高音 mi = E5(76)
-      { note: 79, vel: 96, dur: 120 }, { note: 76, vel: 96, dur: 120 },
-      { note: 76, vel: 96, dur: 30 }, { note: 77, vel: 96, dur: 30 },
-      { note: 76, vel: 96, dur: 30 }, { note: 74, vel: 96, dur: 30 },
-      { note: 72, vel: 96, dur: 60 }, { note: 71, vel: 96, dur: 60 }
+      { note: 0, vel: 96, dur: 60 }, { note: 72, vel: 96, dur: 60 }, { note: 71, vel: 96, dur: 60 },
+      { note: 69, vel: 96, dur: 60 }, { note: 67, vel: 96, dur: 60 }, { note: 64, vel: 96, dur: 60 },
+      { note: 62, vel: 96, dur: 120 }, { note: 0, vel: 96, dur: 60 }, { note: 60, vel: 96, dur: 60 },
+      { note: 60, vel: 96, dur: 60 }, { note: 62, vel: 96, dur: 60 }, { note: 64, vel: 96, dur: 60 },
+      { note: 67, vel: 96, dur: 60 }, { note: 67, vel: 96, dur: 120 }, { note: 0, vel: 96, dur: 60 },
+      { note: 72, vel: 96, dur: 60 }, { note: 71, vel: 96, dur: 60 }, { note: 69, vel: 96, dur: 60 },
+      { note: 67, vel: 96, dur: 60 }, { note: 64, vel: 96, dur: 60 }, { note: 62, vel: 96, dur: 60 },
+      { note: 60, vel: 96, dur: 60 }, { note: 60, vel: 96, dur: 60 }, { note: 62, vel: 96, dur: 60 },
+      { note: 64, vel: 96, dur: 60 }, { note: 60, vel: 96, dur: 60 }, { note: 60, vel: 96, dur: 60 },
+      { note: 0, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
+      { note: 67, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 }, { note: 64, vel: 96, dur: 30 },
+      { note: 67, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 30 },
+      { note: 69, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 },
+      { note: 64, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 },
+      { note: 0, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
+      { note: 67, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 }, { note: 64, vel: 96, dur: 30 },
+      { note: 65, vel: 96, dur: 30 }, { note: 65, vel: 96, dur: 30 }, { note: 65, vel: 96, dur: 30 },
+      { note: 67, vel: 96, dur: 30 }, { note: 64, vel: 96, dur: 30 }, { note: 62, vel: 96, dur: 30 },
+      { note: 60, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 },
+      { note: 0, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
+      { note: 72, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 }, { note: 76, vel: 96, dur: 30 },
+      { note: 76, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 30 },
+      { note: 69, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 }, { note: 76, vel: 96, dur: 30 },
+      { note: 76, vel: 96, dur: 30 }, { note: 74, vel: 96, dur: 30 }, { note: 74, vel: 96, dur: 30 },
+      { note: 71, vel: 96, dur: 60 }, { note: 67, vel: 96, dur: 90 }, { note: 0, vel: 96, dur: 30 },
+      { note: 67, vel: 96, dur: 30 }, { note: 67, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 },
+      { note: 72, vel: 96, dur: 30 }, { note: 69, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 30 },
+      { note: 69, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 30 }, { note: 74, vel: 96, dur: 30 },
+      { note: 74, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 30 },
+      { note: 69, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 60 }, { note: 72, vel: 96, dur: 30 },
+      { note: 74, vel: 96, dur: 30 }, { note: 75, vel: 96, dur: 60 }, { note: 75, vel: 96, dur: 30 },
+      { note: 72, vel: 96, dur: 30 }, { note: 70, vel: 96, dur: 60 }, { note: 67, vel: 96, dur: 30 },
+      { note: 65, vel: 96, dur: 30 }, { note: 64, vel: 96, dur: 60 }, { note: 67, vel: 96, dur: 60 },
+      { note: 69, vel: 96, dur: 60 }, { note: 72, vel: 96, dur: 60 }, { note: 79, vel: 96, dur: 120 },
+      { note: 76, vel: 96, dur: 120 }, { note: 76, vel: 96, dur: 30 }, { note: 77, vel: 96, dur: 30 },
+      { note: 76, vel: 96, dur: 30 }, { note: 74, vel: 96, dur: 30 }, { note: 72, vel: 96, dur: 60 },
+      { note: 71, vel: 96, dur: 60 }
     ]
   }
 ]
@@ -163,6 +131,16 @@ function list() {
   }
   // 迁移：已有库只补「库里还没有的内置曲」，同名（用户可能改过）一律不覆盖
   if (getVer() < BUILTIN_VER) {
+    // v3（2026-11-03）：按 2in1 完整谱修正 Love Song 片段，强制覆盖旧内置版本
+    if (getVer() < 3) {
+      var builtinLove = BUILTIN.filter(function (s) { return s.name === 'Love Song（方大同·片段）' })[0]
+      if (builtinLove) {
+        l.forEach(function (s) {
+          if (s.name === builtinLove.name) s.entries = builtinLove.entries.slice()
+        })
+        persist(l)
+      }
+    }
     var names = {}
     l.forEach(function (s) { names[s.name] = true })
     var added = false
