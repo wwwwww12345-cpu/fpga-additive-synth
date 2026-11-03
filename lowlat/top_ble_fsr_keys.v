@@ -414,6 +414,12 @@ module top_ble_fsr_keys #(
 
     assign key_ready_out = u_top_ready;     // 原版漏了驱动(仿真里是 z); 该脚不接, 补上防悬空
 
+    // 2026-11-03 灯带八度修复（同学提供）：三路事件源（单键/和弦/曲谱）送进
+    //   keyhub 前都加过 p_range_off，灯位/指引匹配必须减回来，否则升八度后灯位右移。
+    wire signed [8:0] guide_s = $signed({1'b0, key_note}) - $signed(p_range_off);
+    wire [6:0] guide_note = (guide_s < 9'sd0)   ? 7'd0 :
+                            (guide_s > 9'sd127) ? 7'd127 : guide_s[6:0];
+
     //------------------------------------------------ 2c2. 指引弹奏 (2026-11-03)
     //   0x94 开始 / 0x95 停止；自动演奏(0x84)也会取消指引。
     //   读口与 song_player 分时复用：g_active 时 player 已被 p_guide_start 停住。
@@ -427,7 +433,7 @@ module top_ble_fsr_keys #(
         .stop(p_guide_stop | p_play_go),
         .song_valid(p_song_valid), .song_len(p_song_len),
         .raddr(g_song_raddr), .rdata(p_song_rdata),
-        .key_we(key_we), .key_note(key_note), .key_on(key_on),
+        .key_we(key_we), .key_note(guide_note), .key_on(key_on),
         .active(g_active), .target_note(g_target), .state(g_state),
         .ptr(), .target_in_range(g_target_in_range)
     );
@@ -523,12 +529,13 @@ module top_ble_fsr_keys #(
     //------------------------------------------------ 2d. LED 音符指引 (2026-10-24)
     //   24 颗 = C4..B5 半音一格；正在发声的音符点亮自己那一格（抬键熄灭）。
     //   事件源 key_we/key_note/key_on 已由 keyhub 合并了 单键 + 和弦 + 曲谱三路。
+    //   2026-11-03 八度修复：用 guide_note（已减掉 p_range_off），灯位跟琴键位置走。
     wire [31:0] guide_mask;
     wire        guide_active;
 
     led_guide #(.BASE_NOTE(7'd60), .NPIX(NPIX)) u_guide (
         .clk(clk), .rst_n(rst_n),
-        .ev_we(key_we), .ev_note(key_note), .ev_on(key_on),
+        .ev_we(key_we), .ev_note(guide_note), .ev_on(key_on),
         .mask(guide_mask), .active(guide_active));
 
     // LED: mono status driver -- ONE colour, but each of the 32 positions can be

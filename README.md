@@ -157,12 +157,13 @@ impl\pnr\project.timing_paths  ← 时序报告
 
 ## 5. 固件与烧录
 
-`firmware/` 放 8 个关键固件（每个约 7 MB，共约 **56 MB**），完整对照见
+`firmware/` 放 9 个关键固件（每个约 7 MB，共约 **63 MB**），完整对照见
 [`firmware/固件对照表.md`](firmware/固件对照表.md)。摘要：
 
 | 固件 | 场景 | SETUP |
 |---|---|---|
-| `14_full_keyboard_guide_v06.fs` | **v0.6 推荐（新）**：键盘 + BLE + 双音色 + 曲谱 + 和弦 + 混响 + 滑音 + **灯带指引（0x94）**；已去 OLED | **+0.978** |
+| `15_full_keyboard_ledfix_v07.fs` | **v0.7 推荐**：v0.6 + **灯带八度修复**（灯位不随音域漂移） | **+0.259** |
+| `14_full_keyboard_guide_v06.fs` | v0.6：去 OLED + 灯带指引（0x94） | +0.978 |
 | `07_full_keyboard_v33_reverb.fs` | 上一版全功能（含 OLED，v0.6 前的基线） | +0.237 |
 | `06_full_keyboard_v32_timing_song.fs` | 07 的前一版（同功能，混响湿声公式未修正） | +0.202 |
 | `03_piano_keyboard_top_keymatrix.fs` | **最稳**：钢琴 only + 键盘（余量大，演示兜底） | +0.966 |
