@@ -62,6 +62,15 @@
 .rowbtns.play { margin-top: 16rpx; }
 .tolib { display: block; font-size: 24rpx; color: #666; margin-top: 20rpx; }
 
+/* ---- 灯带指引（0x94 / 0x95） ---- */
+.lead { font-size: 24rpx; color: #888; margin-top: 24rpx; }
+.obtn.guide { background: #fff8d6; color: #6a4b00; border: 1px solid #ffe066; }
+.obtn.guide[disabled] { color: #bbb; background: #f7f7f7; border-color: #eee; }
+.lgd { font-weight: 500; }
+.lgd.yellow { color: #b8860b; }
+.lgd.green { color: #2f8f4e; }
+.lgd.red { color: #c02532; }
+
 /* ---- 调试 ---- */
 .todemo { display: flex; align-items: center; justify-content: center; }
 

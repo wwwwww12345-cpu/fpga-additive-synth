@@ -33,6 +33,11 @@ const LOG_CAP = 200
 
 function pad2(n) { return (n < 10 ? '0' : '') + n }
 
+// 给「尽力而为」的发送套个上限等待：超时就当没发成，绝不让 UI 卡住（比如断开连接时队列正好在忙）
+function raceTimeout(p, ms) {
+  return Promise.race([p, new Promise(r => setTimeout(() => r('timeout'), ms))])
+}
+
 // 只接受当前按钮表里的步进值，杜绝已移除的半音级参数从 dataset 漏进来
 function isRangeStep(delta) {
   return RANGE_STEPS.some(s => s.delta === delta)
@@ -74,6 +79,12 @@ Page({
     sending: false,
     sendCur: 0,
     sendTotal: 0,
+    // 灯带指引弹奏（0x94/0x95）
+    // songValid：本端记账「曲谱已成功下发」。sendBatch 全部成功后才置 true，
+    //            重新下发一开始就清掉（0x90 本身就会让 FPGA 侧 song_valid 归零）。
+    // guiding  ：指引进行中（FPGA 无状态回读，以最近一次 0x94 发送成功为准）。
+    songValid: false,
+    guiding: false,
     // 日志
     log: [{ t: '--:--:--', dir: 'sys', hex: '', note: '系统就绪' }]
   },
@@ -83,8 +94,10 @@ Page({
     this._offConn = ble.onConnState(res => {
       if (!res.connected && this.data.connected) {
         sender.clear()
-        this.setData({ connected: false, deviceName: '已断开', deviceSub: '点击重新搜索' })
+        const wasGuiding = this.data.guiding
+        this.setData({ connected: false, deviceName: '已断开', deviceSub: '点击重新搜索', guiding: false })
         this.addLog('sys', '', '连接已断开，未发送的队列已清空')
+        if (wasGuiding) this.addLog('sys', '', '灯带指引随断连结束（已断连，0x95 发不出去，由 FPGA 侧自行收尾）')
       } else if (res.connected) {
         this.refreshConn()
       }
@@ -108,15 +121,31 @@ Page({
     }
     this.refreshConn()
     this.refreshSongs()   // 曲谱库可能在 songs 页被改动
+    // 从「琴键」页退回：指引是给琴键页弹奏用的，回到首页就算这一轮结束，按页面隐藏的约定停掉
+    if (this._guideKept) {
+      this._guideKept = false
+      this.stopGuideQuiet('从琴键页返回')
+    }
   },
 
   onHide() {
+    // 页面隐藏 / 切后台：默认自动停指引（尽力而为，失败只写日志、绝不弹错）。
+    // 唯一例外是点「打开琴键」进琴键页——指引本来就是给那里的琴键用的，
+    // 若一进琴键页就停，功能等于不可用；从琴键页退回时在 onShow 里补发 0x95。
+    if (this._toKeyboard) {
+      this._toKeyboard = false
+      this._guideKept = true
+      if (this.data.guiding) this.addLog('sys', '', '去琴键页：指引保持运行（回到首页时自动停止）')
+    } else {
+      this.stopGuideQuiet('页面隐藏/切后台')
+    }
     if (this._offBytes) { this._offBytes(); this._offBytes = null }
     if (this._offQueueLog) { this._offQueueLog(); this._offQueueLog = null }
   },
 
   onUnload() {
     clearTimeout(this._scanTimer)   // B6（评审）：扫描超时定时器随页面销毁清理
+    this.stopGuideQuiet('页面卸载')   // 页面没了，灯带不该还亮着一个目标音
     if (this._offBytes) { this._offBytes(); this._offBytes = null }
     if (this._offConn) { this._offConn(); this._offConn = null }
     if (this._offQueueLog) { this._offQueueLog(); this._offQueueLog = null }
@@ -157,6 +186,9 @@ Page({
 
   async onConnectTap() {
     if (this.data.connected) {
+      // 断连前先把灯带指引停掉：断开之后 0x95 就发不出去了。
+      // 尽力而为（最多等 400ms，队列正忙时不卡住「断开」按钮）。
+      if (this.data.guiding) await raceTimeout(this.stopGuideQuiet('断开连接'), 400)
       await ble.disconnect()
       this.setData({ connected: false, deviceName: '未连接', deviceSub: '点击"搜索"开始扫描' })
       this.addLog('sys', '', '已断开连接')
@@ -360,25 +392,102 @@ Page({
     // 条目帧不逐帧记日志（512 条会刷爆日志面板），只记开始/结束帧 + 汇总 + 进度
     const marked = frames.map((f, i) =>
       (f.cmd === proto.CMD.SONG_ENTRY) ? { ...f, note: null } : f)
-    this.setData({ sending: true, sendCur: 0, sendTotal: frames.length })
+    // 重新下发一开始就作废「有有效曲谱」：0x90 会清掉 FPGA 侧 song_valid，
+    // 指引也随之退出，所以本地 songValid/guiding 一起清（不等下发结果）。
+    const wasGuiding = this.data.guiding
+    this.setData({ sending: true, sendCur: 0, sendTotal: frames.length, songValid: false, guiding: false })
+    if (wasGuiding) this.addLog('sys', '', '重新下发曲谱：灯带指引已作废（FPGA 侧 song_valid 已归零）')
     const t0 = Date.now()
     try {
       await sender.sendBatch(marked, {
         onProgress: (cur, total) => this.setData({ sendCur: cur, sendTotal: total })
       })
       const dt = ((Date.now() - t0) / 1000).toFixed(1)
-      this.addLog('sys', '', `《${song.name}》下发完成：${song.entries.length} 条 / ${frames.length} 帧 / ${dt}s`)
+      this.setData({ songValid: true })   // 全部帧写成功，才允许「指引弹奏」
+      this.addLog('sys', '', `《${song.name}》下发完成：${song.entries.length} 条 / ${frames.length} 帧 / ${dt}s，可以「指引弹奏」了`)
       wx.showToast({ title: '下发完成', icon: 'success' })
     } catch (e) {
       this.addLog('err', '', `《${song.name}》下发失败: ` + (e.errMsg || e.message) + '，本批剩余帧已丢弃')
+      this.addLog('err', '', '曲谱不完整，FPGA 侧不会认为曲谱有效，「指引弹奏」保持禁用')
       wx.showToast({ title: '下发失败', icon: 'none' })
     }
     this.setData({ sending: false })
   },
 
-  async onPlayStart() { await this.sendCmd(proto.encodePlayStart(), '演奏开始') },
+  // ================= 灯带指引弹奏（0x94 / 0x95，v0.6） =================
+  //
+  // 灯语：黄 = 该按这个键；绿 = 按对（保持到松开）；红 = 按错（0.5s 后回黄）。
+  // 灯带只有 24 颗，对应 MIDI 60~83（C4~B5）；超出范围的音不亮灯，但流程照走。
+  // 前置条件：必须先「下发成功」——没有有效曲谱时 FPGA 会用 NACK 码 4 拒掉 0x94。
+
+  async onGuideStart() {
+    if (!this.data.connected) {   // 按钮已禁用，这里是兜底
+      wx.showToast({ title: '请先连接', icon: 'none' })
+      return
+    }
+    if (!this.data.songValid) {
+      wx.showToast({ title: '请先成功下发曲谱', icon: 'none' })
+      this.addLog('err', '', '指引弹奏被拦下：本端还没有「下发成功」的曲谱（此时 0x94 会被 FPGA 以 NACK 码 4 拒绝）')
+      return
+    }
+    const ok = await this.sendCmd(proto.encodeGuideStart(), '指引弹奏开始（黄=该按这个键，绿=按对，红=按错）')
+    if (ok) {
+      this.setData({ guiding: true })
+      this.addLog('sys', '', '灯带指引已开始：黄=该按这个键，绿=按对，红=按错（按错红灯 0.5s 后回黄；休止符自动跳过；曲末自动结束）')
+    } else {
+      this.setData({ guiding: false })
+      this.addLog('err', '', '0x94 指引弹奏没发出去，灯带未进入指引')
+    }
+  },
+
+  async onGuideStop() {
+    const ok = await this.sendCmd(proto.encodeGuideStop(), '指引弹奏停止')
+    this.setData({ guiding: false })
+    this.addLog(ok ? 'sys' : 'err', '', ok ? '灯带指引已停止（0x95）' : '0x95 停止指引没发出去，灯带可能还停在最后一个目标音')
+  },
+
+  /**
+   * 自动停指引：尽力而为——失败只写日志，绝不弹错（断连/切后台时弹窗最烦人）。
+   * 触发点：断开连接前 / 页面隐藏 / 切后台 / 页面卸载 / 从琴键页退回首页。
+   * 返回 Promise<boolean>，调用方可以不等（fire-and-forget），页面卸载路径就靠这个。
+   */
+  stopGuideQuiet(reason) {
+    const was = this.data.guiding
+    if (was) this.setData({ guiding: false })   // 本地先落地，别让 UI 还显示"指引中"
+    if (!was) return Promise.resolve(false)
+    if (!ble.isConnected()) {
+      this.addLog('sys', '', '灯带指引结束（' + reason + '）：已断连，0x95 发不出去')
+      return Promise.resolve(false)
+    }
+    return sender.send({ bytes: proto.encodeGuideStop(), note: '停止指引 · ' + reason })
+      .then(() => { this.addLog('sys', '', '已发 0x95 停止灯带指引（' + reason + '）'); return true })
+      .catch(e => {
+        this.addLog('err', '', '停止指引的 0x95 发送失败（' + reason + '）：'
+          + ((e && (e.errMsg || e.message)) || e) + '，已忽略（不弹错）')
+        return false
+      })
+  },
+
+  // 「打开琴键」是 <navigator> 自己跳转，这里只打个标记：
+  // 进琴键页时 onHide 不自动停指引，否则指引一开就没人能按琴键了。
+  onGotoKeyboard() {
+    this._toKeyboard = true
+  },
+
+  async onPlayStart() {
+    // FPGA 侧 0x84 会取消指引（见 rtl/guide_ctrl.v 的 stop 输入），本地同步清状态
+    if (this.data.guiding) {
+      this.setData({ guiding: false })
+      this.addLog('sys', '', '自动演奏开始，灯带指引已由 FPGA 侧退出')
+    }
+    await this.sendCmd(proto.encodePlayStart(), '演奏开始')
+  },
   async onPlayStop()  { await this.sendCmd(proto.encodePlayStop(), '演奏停止') },
-  async onPlayReset() { await this.sendCmd(proto.encodePlayReset(), '演奏复位') },
+  async onPlayReset() {
+    // 0x93 复位同样会让指引退出
+    if (this.data.guiding) this.setData({ guiding: false })
+    await this.sendCmd(proto.encodePlayReset(), '演奏复位')
+  },
   async onPing() {
     this._pingT = Date.now()
     await this.sendCmd(proto.encodePing(), 'PING')
@@ -431,6 +540,11 @@ Page({
       }
     } else if (f.cmd === proto.CMD.NACK) {
       const c = f.data[0] | 0x80, code = f.data[1]
+      // 0x94 被拒（码 4 = 未下发曲谱 / 曲谱无效）：本地别继续显示"指引中"
+      if (c === proto.CMD.GUIDE_START && this.data.guiding) {
+        this.setData({ guiding: false })
+        this.addLog('err', '', 'FPGA 拒绝了 0x94 指引弹奏（码 ' + code + '：' + proto.ackReason(code) + '），请重新下发曲谱')
+      }
       wx.showModal({
         title: 'FPGA 拒绝 0x' + (c < 16 ? '0' : '') + c.toString(16).toUpperCase(),
         content: proto.ackReason(code),

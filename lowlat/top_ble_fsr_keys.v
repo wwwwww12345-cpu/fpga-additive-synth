@@ -339,6 +339,7 @@ module top_ble_fsr_keys #(
     wire              p_song_valid;
     wire [9:0]        p_song_len;
     wire              p_play_go, p_play_stop, p_play_rst;
+    wire              p_guide_start, p_guide_stop;
     wire [7:0]        p_err_cnt, p_frame_cnt;
 
     ble_cmd u_cmd (
@@ -349,6 +350,7 @@ module top_ble_fsr_keys #(
         .ram_we(p_ram_we), .ram_waddr(p_ram_waddr), .ram_wdata(p_ram_wdata),
         .song_valid(p_song_valid), .song_len(p_song_len), .song_updating(),
         .play_go(p_play_go), .play_stop(p_play_stop), .play_rst(p_play_rst),
+        .guide_start(p_guide_start), .guide_stop(p_guide_stop),
         .err_cnt(p_err_cnt), .frame_cnt(p_frame_cnt),
         .evt_we(evt_we), .evt_cmd(evt_cmd), .evt_code(evt_code),
         .note_we(ble_note_we), .note_on(ble_note_on),
@@ -362,12 +364,22 @@ module top_ble_fsr_keys #(
         .tx_ready(tx_ready), .tx_data(ack_data), .tx_valid(ack_valid));
 
     wire [8:0]  p_song_raddr;
+    wire [8:0]  g_song_raddr;
     wire [23:0] p_song_rdata;
+
+    // 指引弹奏（2026-11-03）：g_active/g_target/g_state 由 guide_ctrl 产生
+    wire        g_active;
+    wire [6:0]  g_target;
+    wire [1:0]  g_state;
+    wire        g_target_in_range;
+
+    // 指引模式与自动演奏互斥：指引时由 guide_ctrl 独占读地址
+    wire [8:0]  song_raddr_mux = g_active ? g_song_raddr : p_song_raddr;
 
     song_ram u_song_ram (
         .clk(clk),
         .we(p_ram_we), .waddr(p_ram_waddr), .wdata(p_ram_wdata),
-        .raddr(p_song_raddr), .rdata(p_song_rdata)
+        .raddr(song_raddr_mux), .rdata(p_song_rdata)
     );
 
     wire       p_ev_req, p_ev_on, p_ev_take;
@@ -378,7 +390,7 @@ module top_ble_fsr_keys #(
         .APPLY_RANGE  (1)          // 音域作用于曲谱: 默认生效(可用参数关掉)
     ) u_player (
         .clk(clk), .rst_n(rst_n),
-        .go(p_play_go), .stop(p_play_stop), .reset(p_play_rst),
+        .go(p_play_go), .stop(p_play_stop | p_guide_start), .reset(p_play_rst),
         .song_valid(p_song_valid), .song_len(p_song_len),
         .raddr(p_song_raddr), .rdata(p_song_rdata),
         .range_off(p_range_off),
@@ -401,6 +413,24 @@ module top_ble_fsr_keys #(
     );
 
     assign key_ready_out = u_top_ready;     // 原版漏了驱动(仿真里是 z); 该脚不接, 补上防悬空
+
+    //------------------------------------------------ 2c2. 指引弹奏 (2026-11-03)
+    //   0x94 开始 / 0x95 停止；自动演奏(0x84)也会取消指引。
+    //   读口与 song_player 分时复用：g_active 时 player 已被 p_guide_start 停住。
+    guide_ctrl #(
+        .RED_CLKS  (25_000_000),      // 按错红灯 0.5 s
+        .BASE_NOTE (7'd60),           // 第 0 颗 = C4
+        .NPIX      (NPIX)
+    ) u_gctrl (
+        .clk(clk), .rst_n(rst_n),
+        .start(p_guide_start),
+        .stop(p_guide_stop | p_play_go),
+        .song_valid(p_song_valid), .song_len(p_song_len),
+        .raddr(g_song_raddr), .rdata(p_song_rdata),
+        .key_we(key_we), .key_note(key_note), .key_on(key_on),
+        .active(g_active), .target_note(g_target), .state(g_state),
+        .ptr(), .target_in_range(g_target_in_range)
+    );
 
     top #(
         .NPIX         (NPIX),
@@ -437,6 +467,7 @@ module top_ble_fsr_keys #(
         .ATK_NOISE    (16'd42000),      // hammer noise (peak ~-42dBFS, ~3ms)
         .ATK_DEC      (16'd8192),
         .OUT_ATT_SHIFT (2),          // **-12dB**: 与用户已确认"很合适"的那版同档
+        .DISP_ON       (0),          // 2026-11-03: 去 OLED 显示链（省 CLS/时序；灯带指引保留）
         .FSR_KEYS_EN   (0)           // [FSR-3] 关掉 top 内部 AIN0~3 自己的键事件
     ) u_top (
         .clk(clk), .btn_rst(top_rst),
@@ -519,13 +550,43 @@ module top_ble_fsr_keys #(
     end
     wire [31:0] ev_mask = {8'h00, ev_h3, ev_h2, ev_h1};
 
-    wire [23:0] led_color = (LED_DBG != 0)    ? 24'h00_FF_00 :   // 探针: 纯绿
+    // 指引弹奏：单色灯带用「全局三色 + 单点 mask」实现 黄/绿/红
+    //   {G,R,B}: 黄=0xAAAA00, 绿=0xAA0000, 红=0x00AA00
+    //   单点 mask 用 24 路 case 译码 + 寄存器输出（避免 32 位移位器成为关键路径）
+    reg [23:0] g_mask_r;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) g_mask_r <= 24'd0;
+        else if (!g_active) g_mask_r <= 24'd0;
+        else case (g_target)
+            7'd60: g_mask_r <= 24'h000001;  7'd61: g_mask_r <= 24'h000002;
+            7'd62: g_mask_r <= 24'h000004;  7'd63: g_mask_r <= 24'h000008;
+            7'd64: g_mask_r <= 24'h000010;  7'd65: g_mask_r <= 24'h000020;
+            7'd66: g_mask_r <= 24'h000040;  7'd67: g_mask_r <= 24'h000080;
+            7'd68: g_mask_r <= 24'h000100;  7'd69: g_mask_r <= 24'h000200;
+            7'd70: g_mask_r <= 24'h000400;  7'd71: g_mask_r <= 24'h000800;
+            7'd72: g_mask_r <= 24'h001000;  7'd73: g_mask_r <= 24'h002000;
+            7'd74: g_mask_r <= 24'h004000;  7'd75: g_mask_r <= 24'h008000;
+            7'd76: g_mask_r <= 24'h010000;  7'd77: g_mask_r <= 24'h020000;
+            7'd78: g_mask_r <= 24'h040000;  7'd79: g_mask_r <= 24'h080000;
+            7'd80: g_mask_r <= 24'h100000;  7'd81: g_mask_r <= 24'h200000;
+            7'd82: g_mask_r <= 24'h400000;  7'd83: g_mask_r <= 24'h800000;
+            default: g_mask_r <= 24'd0;
+        endcase
+    end
+    wire [31:0] g_led_mask = {8'd0, g_mask_r};
+    wire [23:0] g_led_color = (g_state == 2'd1) ? 24'hAA_00_00 :   // 绿: 按对
+                              (g_state == 2'd2) ? 24'h00_AA_00 :   // 红: 按错
+                                                  24'hAA_AA_00;    // 黄: 等待
+
+    wire [23:0] led_color = g_active          ? g_led_color  :
+                            (LED_DBG != 0)    ? 24'h00_FF_00 :   // 探针: 纯绿
                             guide_active      ? 24'h60_FF_00 :   // {G,R,B} 琥珀
                             (act_cnt != 27'd0) ? 24'h55_00_00 :
                             boot_phase         ? 24'h55_55_00 :
                             pulse_on           ? 24'h00_00_28 :
                                                  24'h00_00_00;
-    wire [31:0] led_mask  = (LED_DBG != 0)    ? ev_mask      :
+    wire [31:0] led_mask  = g_active          ? g_led_mask   :
+                            (LED_DBG != 0)    ? ev_mask      :
                             boot_phase   ? 32'h0000_0001 :
                             guide_active ? guide_mask    : 32'hFFFF_FFFF;
 

@@ -1,0 +1,103 @@
+<view class="conn">
+  <view class="dot {{connected ? 'on' : ''}}"></view>
+  <view class="conninfo">
+    <view class="devname">{{deviceName}}</view>
+    <view class="devsub">{{deviceSub}}</view>
+  </view>
+  <button class="cbtn {{connected ? 'off' : ''}}" size="mini" bindtap="onConnectTap" loading="{{connecting}}">
+    {{connected ? '断开' : '搜索'}}
+  </button>
+</view>
+
+<view class="devlist" wx:if="{{devices.length}}">
+  <view class="devtitle">发现 {{devices.length}} 台设备（点一下连接）</view>
+  <view class="devitem" wx:for="{{devices}}" wx:key="deviceId"
+        data-id="{{item.deviceId}}" bindtap="onDeviceTap">
+    <view class="devitemname">{{item.name || '(无名设备)'}}</view>
+    <view class="devitemrssi">{{item.rssi}} dBm</view>
+  </view>
+</view>
+
+<!-- ================= 音域 ================= -->
+<view class="card">
+  <view class="cardtitle">音域 <text class="cardsub">当前偏移 {{rangeOffset >= 0 ? '+' : ''}}{{rangeOffset}} 半音</text></view>
+  <view class="rowbtns">
+    <button class="obtn" wx:for="{{rangeSteps}}" wx:key="label" disabled="{{!connected}}"
+            data-delta="{{item.delta}}" bindtap="onRangeStep">{{item.label}}</button>
+    <button class="obtn warn" disabled="{{!connected}}" bindtap="onRangeReset">重置</button>
+  </view>
+  <view class="tip">偏移作用于 FPGA 侧；压力传感器挡位也可改音域，「重置」为兜底归位，两个来源都合法。实际状态无回读，以日志为准（待定：二期状态回显）。</view>
+</view>
+
+<!-- ================= 和弦 ================= -->
+<view class="card">
+  <view class="cardtitle">和弦模式</view>
+  <view class="chordrow">
+    <view class="chordlabel">{{chordOn ? '开' : '关'}}</view>
+    <switch checked="{{chordOn}}" disabled="{{!connected}}" bindchange="onChordSwitch" />
+  </view>
+  <radio-group class="chordtypes" bindchange="onChordType">
+    <label class="ctype {{chordType === item.value ? 'sel' : ''}} {{!chordOn ? 'dim' : ''}}"
+           wx:for="{{chordTypes}}" wx:key="value">
+      <radio value="{{item.value}}" checked="{{chordType === item.value}}" disabled="{{!chordOn || !connected}}" />
+      <text>{{item.label}}</text>
+    </label>
+  </radio-group>
+  <view class="tip">FPGA 收到单键事件时按当前类型自动展开和弦，本端只发开关与类型。</view>
+</view>
+
+<!-- ================= 音色 ================= -->
+<view class="card">
+  <view class="cardtitle">音色 <text class="cardsub">{{timbreNames[timbre]}}</text></view>
+  <view class="chordrow">
+    <view class="chordlabel">{{timbreNames[timbre]}}</view>
+    <switch checked="{{timbre === timbreGuitar}}" disabled="{{!connected}}" bindchange="onTimbreSwitch" />
+  </view>
+  <view class="tip">0x86 音色切换（0=钢琴 / 非 0=吉他），FPGA 复位后回到钢琴。实际状态无回读，以日志为准（待定：二期状态回显）。</view>
+</view>
+
+<!-- ================= 曲谱下发与演奏 ================= -->
+<view class="card">
+  <view class="cardtitle">曲谱下发与演奏</view>
+  <view class="songrow" wx:if="{{songNames.length}}">
+    <picker class="songpicker" range="{{songNames}}" value="{{songIndex}}" bindchange="onSongChange">
+      <view class="pickerview">{{songNames[songIndex] || '选择曲谱'}} ▾</view>
+    </picker>
+    <button class="obtn main" disabled="{{!connected || sending || !songNames.length}}" bindtap="onSendSong">
+      {{sending ? '下发中…' : '下发'}}
+    </button>
+  </view>
+  <view class="tip" wx:else>曲谱库为空，去「曲谱库」页新建或导入。</view>
+  <view class="progress" wx:if="{{sending}}">正在下发 {{sendCur}}/{{sendTotal}} 帧（每帧间隔 10ms）</view>
+  <view class="progress warn" wx:if="{{sending}}">下发期间请勿切后台/锁屏：iOS 挂起会中断 BLE，剩余帧将被自动丢弃（B10）</view>
+  <view class="rowbtns play">
+    <button class="obtn main" disabled="{{!connected}}" bindtap="onPlayStart">演奏开始</button>
+    <button class="obtn" disabled="{{!connected}}" bindtap="onPlayStop">演奏停止</button>
+    <button class="obtn" disabled="{{!connected}}" bindtap="onPlayReset">演奏复位</button>
+  </view>
+  <navigator class="tolib" url="/pages/songs/songs">管理曲谱库（新建 / 编辑 / JSON 导入）→</navigator>
+</view>
+
+<!-- ================= 调试 ================= -->
+<view class="card">
+  <view class="cardtitle">连通性</view>
+  <view class="rowbtns">
+    <button class="obtn" disabled="{{!connected}}" bindtap="onPing">PING (0x80)</button>
+    <navigator class="obtn todemo" url="/pages/demo/demo">旧界面自测（小车/琴键）</navigator>
+  </view>
+</view>
+
+<!-- ================= 日志 ================= -->
+<view class="logtitle">
+  <text>收发日志（hex · {{log.length}}）</text>
+  <text class="clearbtn" bindtap="onClearLog">清空</text>
+</view>
+<scroll-view class="log" scroll-y scroll-into-view="logend">
+  <view wx:for="{{log}}" wx:key="index" class="logline {{item.dir}}">
+    <text class="lt">{{item.t}}</text>
+    <text class="ld">{{item.dir === 'tx' ? '→' : (item.dir === 'rx' ? '←' : (item.dir === 'err' ? '✗' : '·'))}}</text>
+    <text class="lh">{{item.hex}}</text>
+    <text class="ln">{{item.note}}</text>
+  </view>
+  <view id="logend"></view>
+</scroll-view>

@@ -1,0 +1,337 @@
+/**
+ * FPGA 乐器控制台（首页）
+ *  - 连接管理（复用原有扫描/连接流程，已验证可用）
+ *  - 音域（±12 八度步进 + 重置兜底）
+ *  - 音色（钢琴 / 吉他，0x86）以及和弦模式（开关 + 大三/小三/属七）
+ *  - 曲谱下发（全局队列串行发送）+ 演奏开始/停止/复位
+ *  - 收发日志面板（hex + 协议注释 + 清空）
+ * 所有命令字节一律来自 utils/protocol.js，页面不写魔法数字。
+ */
+const ble = require('../../utils/ble.js')
+const sender = require('../../utils/sender.js')
+const proto = require('../../utils/protocol.js')
+const songs = require('../../utils/songs.js')
+
+// 音域只保留八度（±12）两档；半音级微调按钮已移除，这里也不再保留对应入参
+const RANGE_STEPS = [
+  { label: '−12', delta: -12 }, { label: '+12', delta: 12 }
+]
+const CHORD_TYPES = [
+  { label: '大三', value: proto.CHORD.MAJOR },
+  { label: '小三', value: proto.CHORD.MINOR },
+  { label: '属七', value: proto.CHORD.DOM7 }
+]
+const LOG_CAP = 200
+
+function pad2(n) { return (n < 10 ? '0' : '') + n }
+
+// 只接受当前按钮表里的步进值，杜绝已移除的半音级参数从 dataset 漏进来
+function isRangeStep(delta) {
+  return RANGE_STEPS.some(s => s.delta === delta)
+}
+
+Page({
+  data: {
+    // 连接
+    connected: false,
+    connecting: false,
+    scanning: false,
+    deviceName: '未连接',
+    deviceSub: '点击"搜索"开始扫描',
+    devices: [],
+    // 音域
+    rangeOffset: 0,          // 最近一次命令的偏移（半音）；无回读，FPGA 实际状态以此为准（待定：二期状态回显）
+    rangeSteps: RANGE_STEPS,
+    // 和弦
+    chordOn: false,
+    chordTypes: CHORD_TYPES,
+    chordType: proto.CHORD.MAJOR,
+    // 音色（0x86）：0=钢琴 1=吉他；无回读，以最近一次命令为准
+    timbre: proto.TIMBRE.PIANO,
+    timbreGuitar: proto.TIMBRE.GUITAR,
+    timbreNames: proto.TIMBRE_NAMES,
+    // 曲谱
+    songNames: [],
+    songIndex: 0,
+    sending: false,
+    sendCur: 0,
+    sendTotal: 0,
+    // 日志
+    log: [{ t: '--:--:--', dir: 'sys', hex: '', note: '系统就绪' }]
+  },
+
+  onLoad() {
+    // 连接状态：页面存活期间始终监听（掉线提示 + 禁用发送）
+    this._offConn = ble.onConnState(res => {
+      if (!res.connected && this.data.connected) {
+        sender.clear()
+        this.setData({ connected: false, deviceName: '已断开', deviceSub: '点击重新搜索' })
+        this.addLog('sys', '', '连接已断开，未发送的队列已清空')
+      } else if (res.connected) {
+        this.refreshConn()
+      }
+    })
+    // 发送队列日志 → 日志面板
+    this._offQueueLog = sender.onLog(e => {
+      this.addLog(e.dir, e.hex, e.note)
+    })
+    this.refreshSongs()
+  },
+
+  onShow() {
+    // 字节 RX 回调：仅本页可见时接管（demo 页同样模式，避免双页重复消费）
+    if (!this._offBytes) {
+      this._decoder = proto.createDecoder()
+      this._offBytes = ble.onBytes(buf => this.onRx(buf))
+    }
+    this.refreshConn()
+    this.refreshSongs()   // 曲谱库可能在 songs 页被改动
+  },
+
+  onHide() {
+    if (this._offBytes) { this._offBytes(); this._offBytes = null }
+  },
+
+  onUnload() {
+    clearTimeout(this._scanTimer)   // B6（评审）：扫描超时定时器随页面销毁清理
+    if (this._offBytes) { this._offBytes(); this._offBytes = null }
+    if (this._offConn) { this._offConn(); this._offConn = null }
+    if (this._offQueueLog) { this._offQueueLog(); this._offQueueLog = null }
+    // B1（评审）：不在页面卸载时断开全局连接——ble.js 连接态是模块级单例，
+    // 断开只由用户点「断开」按钮触发（与 demo 页行为对齐，防误卸载时断连）
+  },
+
+  refreshConn() {
+    const on = ble.isConnected()
+    if (on !== this.data.connected) {
+      this.setData({
+        connected: on,
+        deviceName: on ? this.data.deviceName : '未连接',
+        deviceSub: on ? this.data.deviceSub : '点击"搜索"开始扫描'
+      })
+    }
+  },
+
+  refreshSongs() {
+    const list = songs.list()
+    const names = list.map(s => s.name + '（' + s.entries.length + '条）')
+    let idx = this.data.songIndex
+    if (idx >= list.length) idx = Math.max(0, list.length - 1)
+    // A2（评审）：不参与渲染的簿记字段存实例属性，不走 setData（省一次序列化+视图层通道）
+    this._songIds = list.map(s => s.id)
+    this.setData({ songNames: names, songIndex: idx })
+  },
+
+  // ================= 连接（沿用已调通的扫描/连接流程） =================
+
+  async onConnectTap() {
+    if (this.data.connected) {
+      await ble.disconnect()
+      this.setData({ connected: false, deviceName: '未连接', deviceSub: '点击"搜索"开始扫描' })
+      this.addLog('sys', '', '已断开连接')
+      return
+    }
+    this.setData({ connecting: true, scanning: true, devices: [], deviceSub: '扫描中(最多8秒)…' })
+    this._scanStopped = false
+    this.addLog('sys', '', '开始扫描 BLE 设备…（确认模块没被电脑连着，否则不会广播）')
+    try {
+      await ble.openAdapter()
+      const found = []
+      await ble.startScan(d => {
+        const i = found.findIndex(x => x.deviceId === d.deviceId)
+        if (i >= 0) found[i] = d
+        else found.push(d)
+        this.setData({ devices: found.slice() })
+      })
+      this._scanTimer = setTimeout(() => {
+        if (this._scanStopped) return
+        this.setData({ scanning: false, connecting: false })
+        this.addLog('sys', '', `扫描结束：共 ${found.length} 台。` + (found.length
+          ? '在列表里点你的模块连接。'
+          : '0 台！排查：1) 电脑/其他手机是否还连着模块(占用后不广播) 2) 安卓给微信开位置权限 3) 模块断电重上电'))
+      }, 8500)
+    } catch (e) {
+      this.setData({ connecting: false, scanning: false, deviceSub: '蓝牙初始化失败: ' + e.errMsg })
+      this.addLog('err', '', '蓝牙初始化失败: ' + (e.errMsg || e.message))
+    }
+  },
+
+  onDeviceTap(e) {
+    const id = e.currentTarget.dataset.id
+    const d = this.data.devices.find(x => x.deviceId === id)
+    if (d && !this.data.connected && !this._connecting) this.doConnect(d)
+  },
+
+  async doConnect(d) {
+    if (this.data.connected || this._connecting) return
+    if (this.data.scanning) {
+      this._scanStopped = true
+      clearTimeout(this._scanTimer)
+      await ble.stopScan()
+      this.setData({ scanning: false })
+      this.addLog('sys', '', '已停止扫描，正在连接…')
+    }
+    this._connecting = true
+    this.setData({ deviceSub: '正在连接 ' + (d.name || '(无名)') + '…' })
+    try {
+      await ble.connect(d.deviceId)
+      if (this._decoder) this._decoder.reset()  // 清掉上次会话残留的半帧
+      this.setData({
+        connected: true, connecting: false,
+        deviceName: d.name || '(无名)', deviceSub: 'FFE1 · 已连接',
+        devices: []
+      })
+      this.addLog('sys', '', '已连接 ' + (d.name || d.deviceId))
+    } catch (e) {
+      this.setData({ connecting: false, deviceSub: '连接失败: ' + e.message })
+      this.addLog('err', '', '连接失败: ' + e.message)
+    }
+    this._connecting = false
+  },
+
+  // ================= 音域 =================
+
+  async onRangeStep(e) {
+    const delta = Number(e.currentTarget.dataset.delta)
+    if (!isRangeStep(delta)) {   // 只认 ±12；其它入参（含已移除的半音级）一律丢弃
+      this.addLog('err', '', '忽略非法音域步进: ' + delta + '（音域只保留 ±12）')
+      return
+    }
+    const next = proto.clamp(this.data.rangeOffset + delta, -proto.RANGE_BIAS, 127 - proto.RANGE_BIAS)
+    if (next === this.data.rangeOffset) {
+      wx.showToast({ title: '已到音域边界', icon: 'none' })
+      return
+    }
+    // B5（评审）：仅当发送成功才更新本地状态，防 UI 与 FPGA 实际状态漂移
+    const ok = await this.sendCmd(proto.encodeRangeSet(next), '音域 ' + (next >= 0 ? '+' : '') + next + ' 半音')
+    if (ok) this.setData({ rangeOffset: next })
+  },
+
+  async onRangeReset() {
+    const ok = await this.sendCmd(proto.encodeRangeReset(), '音域重置（兜底归位，含传感器侧偏移）')
+    if (ok) this.setData({ rangeOffset: 0 })   // B5（评审）
+  },
+
+  // ================= 和弦 =================
+
+  async onChordSwitch(e) {
+    const on = !!e.detail.value
+    this.setData({ chordOn: on })   // 受控 switch 先跟手回显
+    const t = on ? this.data.chordType : proto.CHORD.OFF
+    const ok = await this.sendCmd(proto.encodeChordSet(t), '和弦 ' + (on ? proto.CHORD_NAMES[t] : '关'))
+    if (!ok) this.setData({ chordOn: !on })   // B5（评审）：发送失败回滚到 FPGA 侧真实状态
+  },
+
+  async onChordType(e) {
+    const t = Number(e.detail.value)
+    const prev = this.data.chordType
+    this.setData({ chordType: t })  // 受控 radio 先跟手回显
+    if (this.data.chordOn) {
+      const ok = await this.sendCmd(proto.encodeChordSet(t), '和弦 ' + proto.CHORD_NAMES[t])
+      if (!ok) this.setData({ chordType: prev })   // B5（评审）
+    }
+  },
+
+  // ================= 音色（0x86） =================
+
+  async onTimbreSwitch(e) {
+    const on = !!e.detail.value
+    const prev = this.data.timbre
+    const next = on ? proto.TIMBRE.GUITAR : proto.TIMBRE.PIANO
+    this.setData({ timbre: next })   // 受控 switch 先跟手回显
+    const ok = await this.sendCmd(proto.encodeTimbre(next), '音色 ' + proto.TIMBRE_NAMES[next])
+    if (!ok) {
+      // B5（评审）：发送失败回滚到 FPGA 侧真实状态，并留痕
+      this.setData({ timbre: prev })
+      this.addLog('err', '', '音色切换到「' + proto.TIMBRE_NAMES[next] + '」失败，已回滚为「' + proto.TIMBRE_NAMES[prev] + '」')
+    }
+  },
+
+  // ================= 曲谱下发与演奏 =================
+
+  onSongChange(e) {
+    this.setData({ songIndex: Number(e.detail.value) })
+  },
+
+  async onSendSong() {
+    if (this.data.sending) return
+    if (!this.data.connected) {   // B6（评审）：按钮禁用之外的兜底前置检查
+      wx.showToast({ title: '未连接', icon: 'none' })
+      return
+    }
+    const ids = this._songIds || []   // A2（评审）：读实例属性（原 this.data._songIds）
+    const song = songs.get(ids[this.data.songIndex])
+    if (!song) { wx.showToast({ title: '曲谱库为空', icon: 'none' }); return }
+    let frames
+    try {
+      frames = proto.encodeSongFrames(song)   // 空/超512/越界在此抛错
+    } catch (err) {
+      wx.showModal({ title: '无法下发', content: err.message, showCancel: false })
+      return
+    }
+    // 条目帧不逐帧记日志（512 条会刷爆日志面板），只记开始/结束帧 + 汇总 + 进度
+    const marked = frames.map((f, i) =>
+      (f.cmd === proto.CMD.SONG_ENTRY) ? { ...f, note: null } : f)
+    this.setData({ sending: true, sendCur: 0, sendTotal: frames.length })
+    const t0 = Date.now()
+    try {
+      await sender.sendBatch(marked, {
+        onProgress: (cur, total) => this.setData({ sendCur: cur, sendTotal: total })
+      })
+      const dt = ((Date.now() - t0) / 1000).toFixed(1)
+      this.addLog('sys', '', `《${song.name}》下发完成：${song.entries.length} 条 / ${frames.length} 帧 / ${dt}s`)
+      wx.showToast({ title: '下发完成', icon: 'success' })
+    } catch (e) {
+      this.addLog('err', '', `《${song.name}》下发失败: ` + (e.errMsg || e.message) + '，本批剩余帧已丢弃')
+      wx.showToast({ title: '下发失败', icon: 'none' })
+    }
+    this.setData({ sending: false })
+  },
+
+  async onPlayStart() { await this.sendCmd(proto.encodePlayStart(), '演奏开始') },
+  async onPlayStop()  { await this.sendCmd(proto.encodePlayStop(), '演奏停止') },
+  async onPlayReset() { await this.sendCmd(proto.encodePlayReset(), '演奏复位') },
+  async onPing()      { await this.sendCmd(proto.encodePing(), 'PING') },
+
+  // ================= 发送（统一走全局队列） =================
+
+  async sendCmd(bytes, note) {
+    if (!this.data.connected) {
+      this.addLog('err', '', '未连接，无法发送「' + note + '」')
+      wx.showToast({ title: '未连接', icon: 'none' })
+      return false
+    }
+    try {
+      await sender.send({ bytes, note })
+      return true
+    } catch (e) {
+      return false   // 失败详情已由队列写入日志面板
+    }
+  },
+
+  // ================= RX 与日志 =================
+
+  onRx(buf) {
+    const u8 = new Uint8Array(buf)
+    const hex = Array.from(u8).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
+    // ASCII 可打印预览（不可打印字节显示 ·）
+    const ascii = Array.from(u8).map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : '·').join('')
+    // 协议解码（FPGA 应答二期启用，先按同帧格式解析）
+    let frames = []
+    if (this._decoder) frames = this._decoder.pushAll(u8)
+    const desc = frames.map(f => f.desc).join('; ')
+    this.addLog('rx', hex, (desc ? desc + ' ' : '') + (ascii ? `| "${ascii}"` : ''))
+  },
+
+  addLog(dir, hex, note) {
+    const d = new Date()
+    const t = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
+    const log = this.data.log.concat({ t, dir, hex, note })
+    if (log.length > LOG_CAP) log.splice(0, log.length - LOG_CAP)
+    this.setData({ log })
+  },
+
+  onClearLog() {
+    this.setData({ log: [{ t: '--:--:--', dir: 'sys', hex: '', note: '已清空' }] })
+  }
+})

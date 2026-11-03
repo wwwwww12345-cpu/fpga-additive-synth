@@ -42,6 +42,10 @@ module ble_cmd (
     output reg         play_stop,
     output reg         play_rst,
 
+    // 指引弹奏(单拍脉冲, 2026-11-03)
+    output reg         guide_start,      // 0x94: 用已下发曲谱开始灯带指引
+    output reg         guide_stop,       // 0x95: 退出指引
+
     // 诊断
     output reg  [7:0]  err_cnt,          // 未知命令/计数不符/溢出/超 N 写入
     output reg  [7:0]  frame_cnt,        // 完整帧(含零数据帧)计数
@@ -69,6 +73,8 @@ module ble_cmd (
                C_SENT  = 8'h91,
                C_SEND  = 8'h92,
                C_SRST  = 8'h93,
+               C_GSTR  = 8'h94,     // 指引弹奏开始 (2026-11-03)
+               C_GSTP  = 8'h95,     // 指引弹奏停止 (2026-11-03)
                C_NON   = 8'h87,     // 单音按下: note, vel
                C_NOFF  = 8'h88;     // 单音松开: note
 
@@ -127,6 +133,8 @@ module ble_cmd (
             play_go   <= 1'b0;
             play_stop <= 1'b0;
             play_rst  <= 1'b0;
+            guide_start <= 1'b0;
+            guide_stop  <= 1'b0;
             err_cnt   <= 8'd0;
             frame_cnt <= 8'd0;
             evt_we    <= 1'b0;
@@ -138,6 +146,8 @@ module ble_cmd (
             play_go   <= 1'b0;
             play_stop <= 1'b0;
             play_rst  <= 1'b0;
+            guide_start <= 1'b0;
+            guide_stop  <= 1'b0;
             ram_we    <= 1'b0;
             evt_we    <= 1'b0;
             note_we   <= 1'b0; note_on <= 1'b0; note_note <= 7'd0; note_vel <= 7'd0;
@@ -222,6 +232,18 @@ module ble_cmd (
                     C_PLAY : play_go   <= 1'b1;                 // player 自己判 song_valid
 
                     C_STOP : play_stop <= 1'b1;
+
+                    // 指引弹奏: 需要已下发并通过校验的曲谱(0x92 之后 song_valid=1)
+                    C_GSTR : begin
+                        if (song_valid) begin
+                            guide_start <= 1'b1;
+                        end else begin
+                            evt_code <= 4'd4;                   // NACK: 未下发曲谱 / 曲谱无效
+                            err_cnt  <= err_cnt + 8'd1;
+                        end
+                    end
+
+                    C_GSTP : guide_stop <= 1'b1;
 
                     C_SBEG : begin
                         // N = d0 | (d1<<7), 上限 512; 期间禁止演奏, 曲谱暂不可用

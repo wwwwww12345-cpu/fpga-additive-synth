@@ -41,6 +41,7 @@ add_file rtl/ble_cmd.v
 add_file rtl/ack_tx.v
 add_file rtl/keyhub.v
 add_file rtl/song_player.v
+add_file rtl/guide_ctrl.v
 add_file rtl/song_ram.v
 add_file rtl/engine.sdc
 add_file lowlat/top_ble_fsr_keys.cst

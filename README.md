@@ -2,7 +2,7 @@
 
 > 一句话：在 Sipeed Tang Primer 25K（Gowin **GW5A-25A**）上用纯 HDL 做一台**逐样本加法合成**的电子乐器——
 > **32 复音 × 16 分音 = 512 个独立振荡器**、采样率 **48.828125 kHz**、钢琴/吉他双音色、
-> 矩阵键盘与手机蓝牙两路演奏、力度/颤音/滑音三维表情、OLED 李萨如与 WS2812 逐音指引。
+> 矩阵键盘与手机蓝牙两路演奏、力度/颤音/滑音三维表情、24 颗 WS2812 灯带逐音指引（v0.6：App 曲谱下发后黄/绿/红指引弹奏）。
 > 全部声音由 FPGA 实时计算，**不播放任何预录 PCM**。
 
 本仓库是**作品开源代码**（构建脚本 + RTL + 参数表 + 测试台 + 小程序 + 文档）。
@@ -24,7 +24,7 @@
 | 演奏输入 | ① 16 键 4×4 矩阵键盘，按下到出声约 **1 ms** ② 手机 BLE 键盘（`0x87/0x88`） |
 | 表情维度 | 力度（FSR 码值 → 4 层）、触后颤音（FSR 压力 → 0..21 音分 / 5.5 Hz）、滑音（`0x8B`） |
 | 效果 | 混响（`0x89` 湿度滑块；RTL 与仿真通过，**板上湿声暂不可闻**，见 §7） |
-| 可视化 | OLED 128×64 李萨如图；WS2812 灯带逐音指引（64 条目内置曲谱 ROM） |
+| 可视化 | 24 颗 WS2812 灯带按音高点亮；v0.6 起 App 曲谱 + `0x94` 灯带指引（黄=该按 / 绿=按对 / 红=按错） |
 | 交互 | 微信小程序控制台 / 弹琴页：连接、PING、音域、和弦、音色、混响、滑音、曲谱下发与播放 |
 | 综合（07 固件） | SETUP **+0.237 ns** / HOLD +0.151 ns / CLS **92%** / DSP 25/28 |
 
@@ -54,7 +54,7 @@
 │  ├─ ads1115_if.v              ADS1115 I2C 读取（FSR）
 │  ├─ uart_key.v / uart_rx_off.v / uart_tx_off.v / UART_Receiver.v  串口链路
 │  ├─ song_player.v / song_ram.v / led_guide.v / viz_led.v          曲谱播放与灯带指引
-│  ├─ viz_lissa.v / fb_128x64.v / ssd1306.v / spi_master.v          OLED 李萨如显示链
+│  ├─ guide_ctrl.v / led_guide.v / ws2812_mono.v                   灯带指引与驱动（v0.6 已移除 OLED 链）
 │  ├─ ws2812_phy.v / ws2812_mono.v                                  WS2812 物理层
 │  ├─ sine_lut_full.v           1024 点正弦表查表
 │  ├─ test_pattern.v            现场验收测试图样（K4 选通，频谱可见多谱峰）
@@ -157,17 +157,18 @@ impl\pnr\project.timing_paths  ← 时序报告
 
 ## 5. 固件与烧录
 
-`firmware/` 只放 7 个关键固件（每个约 7 MB，共约 **48.8 MB**），完整对照见
+`firmware/` 放 8 个关键固件（每个约 7 MB，共约 **56 MB**），完整对照见
 [`firmware/固件对照表.md`](firmware/固件对照表.md)。摘要：
 
 | 固件 | 场景 | SETUP |
 |---|---|---|
-| `07_full_keyboard_v33_reverb.fs` | **推荐演示**：键盘 + BLE + 双音色 + 曲谱 + 和弦 + 混响 + 滑音 + OLED + 灯带 | +0.237 |
+| `14_full_keyboard_guide_v06.fs` | **v0.6 推荐（新）**：键盘 + BLE + 双音色 + 曲谱 + 和弦 + 混响 + 滑音 + **灯带指引（0x94）**；已去 OLED | **+0.978** |
+| `07_full_keyboard_v33_reverb.fs` | 上一版全功能（含 OLED，v0.6 前的基线） | +0.237 |
 | `06_full_keyboard_v32_timing_song.fs` | 07 的前一版（同功能，混响湿声公式未修正） | +0.202 |
 | `03_piano_keyboard_top_keymatrix.fs` | **最稳**：钢琴 only + 键盘（余量大，演示兜底） | +0.966 |
 | `02_full_keyboard_top_ble_fsr_keys.fs` | 上一轮全功能版（双源仲裁有 race） | +0.659 |
 | `01_full_phone_top_ble_fsr.fs` | 没有实物键盘时用手机弹 | +1.327 |
-| `04_keyboard_guitar_nodisp_top_keymatrix_gtr.fs` | 键盘 + 吉他、无 OLED（备选） | +0.563 |
+| `04_keyboard_guitar_nodisp_top_keymatrix_gtr.fs` | 键盘 + 吉他、无显示（备选） | +0.563 |
 | `12_full_keyboard_v35_reverb_min.fs` | 混响**诊断**用最小结构（不要用于演示） | +0.250 |
 
 烧录（Gowin Programmer）：
@@ -177,7 +178,7 @@ impl\pnr\project.timing_paths  ← 时序报告
 3. 烧完**按一下 H11（USER_KEY）复位**——I2C 错误标志是粘滞的；
 4. 上电/复位时**手离开 FSR**；先按一个键盘键应有声，或手机连上发 PING 应回 ACK。
 
-引脚全表（BLE / I2S / FSR / 矩阵键盘 / OLED / 灯带）见
+引脚全表（BLE / I2S / FSR / 矩阵键盘 / 灯带）见
 [`docs/接线与固件说明_20261102.md`](docs/接线与固件说明_20261102.md) §4。
 
 > **本仓库不放 `.fs`**：这些是约 7 MB 的比特流二进制，放在 **Release / 网盘**分发
@@ -230,8 +231,8 @@ impl\pnr\project.timing_paths  ← 时序报告
 6. **曲谱上限 512 条**，`dur` 单位 10 ms、单条 ≤127（1.27 s），更长的音用连续同音条目拼接。
 7. **两路输入不建议同时用**：07 已修双源仲裁，但"BLE 事件与键盘同一拍到达"的边界没有做过长时间 soak；
    演示时单路操作。
-8. **OLED 按 SH1106 编译**（`COL_OFF=2`）：SSD1306 屏一般能亮，边缘可能差 2 列。
-9. 04 固件为腾时序删掉了曲谱/和弦/OLED，属功能性裁剪，不是 bug。
+8. **v0.6 已移除 OLED 显示链**（`DISP_ON=0`），`viz_lissa/ssd1306/spi_master` 不再综合。
+9. 04 固件为腾时序删掉了曲谱/和弦/显示，属功能性裁剪，不是 bug。
 10. 混响/延迟/合唱三种效果里**只做了混响**，延迟与合唱未实现。
 
 ---

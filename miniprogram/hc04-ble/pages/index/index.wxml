@@ -97,6 +97,18 @@
     <button class="obtn" disabled="{{!connected}}" bindtap="onPlayStop">演奏停止</button>
     <button class="obtn" disabled="{{!connected}}" bindtap="onPlayReset">演奏复位</button>
   </view>
+  <!-- 灯带指引弹奏（0x94 / 0x95）：只有「下发成功」后「指引弹奏」才可点 -->
+  <view class="lead">灯带指引弹奏</view>
+  <view class="rowbtns play">
+    <button class="obtn guide" disabled="{{!connected || !songValid || sending}}" bindtap="onGuideStart">指引弹奏</button>
+    <button class="obtn" disabled="{{!connected || !guiding}}" bindtap="onGuideStop">停止指引</button>
+  </view>
+  <view class="tip" wx:if="{{!songValid}}">「指引弹奏」需要先「下发」成功一次曲谱（没有有效曲谱时 FPGA 会拒掉 0x94）。</view>
+  <view class="tip">
+    按灯带：<text class="lgd yellow">黄</text> = 该按这个键，<text class="lgd green">绿</text> = 按对，<text class="lgd red">红</text> = 按错。
+    {{guiding ? '指引进行中：' : ''}}按对时灯保持绿色到松开，松开换下一个音（黄）；按错红灯亮 0.5 秒后回黄；休止符自动跳过，曲末自动结束。
+    灯带只有 24 颗，对应 C4~B5（MIDI 60~83），超出这个范围的音不亮灯、但流程照走。离开本页 / 切后台 / 断开连接会自动发 0x95 停掉指引（点「打开琴键」去弹琴页时保持，从琴键页退回首页时自动停）。
+  </view>
   <navigator class="tolib" url="/pages/songs/songs">管理曲谱库（新建 / 编辑 / JSON 导入）→</navigator>
 </view>
 
@@ -105,7 +117,7 @@
   <view class="cardtitle">连通性</view>
   <view class="rowbtns">
     <button class="obtn" disabled="{{!connected}}" bindtap="onPing">PING (0x80)</button>
-    <navigator class="obtn todemo" url="/pages/demo/demo">打开琴键（横屏 · 两个八度）</navigator>
+    <navigator class="obtn todemo" url="/pages/demo/demo" bindtap="onGotoKeyboard">打开琴键（横屏 · 两个八度）</navigator>
   </view>
 </view>
 

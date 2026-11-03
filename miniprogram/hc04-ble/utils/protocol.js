@@ -17,7 +17,7 @@
 
 'use strict'
 
-var PROTOCOL_VERSION = 'v0.5'   // v0.5（2026-11-02）：补 0x89 混响湿度 + 0x8B 滑音
+var PROTOCOL_VERSION = 'v0.6'   // v0.6（2026-11-03）：补 0x94/0x95 灯带指引弹奏（曲谱下发后按灯带弹）
 
 // ---------------- 命令表（数值可调，表结构保持） ----------------
 
@@ -37,6 +37,8 @@ var CMD = {
   SONG_ENTRY:  0x91, // 3 数据字节：曲谱条目 note/vel/dur
   SONG_END:    0x92, // 0 数据字节：曲谱下发结束
   PLAY_RESET:  0x93, // 0 数据字节：演奏复位（曲谱指针/状态归零）
+  GUIDE_START: 0x94, // 0 数据字节：灯带指引弹奏开始（要用已下发且校验通过的曲谱，否则 FPGA 回 NACK 码 4）
+  GUIDE_STOP:  0x95, // 0 数据字节：灯带指引弹奏停止（退出指引，灯带归零）
   // ---- 下行（FPGA → 手机）----
   ACK:         0xA1, // 1 数据字节：被确认的命令字节
   NACK:        0xA2  // 2 数据字节：出错命令字节 + 错误码
@@ -50,6 +52,7 @@ var CMD_DATA_LEN = {
   0x89: 1,            // 混响湿度（FPGA ble_cmd.v C_VERB）
   0x8B: 1,            // 滑音（FPGA ble_cmd.v C_GLID）
   0x90: 2, 0x91: 3, 0x92: 0, 0x93: 0,
+  0x94: 0, 0x95: 0,   // 灯带指引弹奏开始/停止（FPGA ble_cmd.v C_GSTR/C_GSTP，0 数据字节）
   0xA1: 1, 0xA2: 2
 }
 
@@ -62,6 +65,7 @@ var CMD_NAMES = {
   0x8B: '滑音',
   0x87: '单音按下', 0x88: '单音松开',
   0x90: '曲谱开始', 0x91: '曲谱条目', 0x92: '曲谱结束', 0x93: '演奏复位',
+  0x94: '指引弹奏开始', 0x95: '指引弹奏停止',
   0xA1: 'ACK', 0xA2: 'NACK'
 }
 
@@ -69,7 +73,8 @@ var CMD_NAMES = {
 var ACK_REASONS = {
   1: '条目数不符（实际写入条数与 0x90 声明的 N 不一致）',
   2: 'N 超范围（N>512 或 N=0）',
-  3: '还没开始下发就发了 0x92'
+  3: '还没开始下发就发了 0x92',
+  4: '未下发曲谱 / 曲谱无效（0x94 指引弹奏要求 0x92 已校验通过）'
 }
 
 function ackReason(code) {
@@ -134,6 +139,17 @@ function encodeChordSet(type) {
 function encodePlayStart()  { return frame(CMD.PLAY_START) }
 function encodePlayStop()   { return frame(CMD.PLAY_STOP) }
 function encodePlayReset()  { return frame(CMD.PLAY_RESET) }
+
+// ---------------- encode：灯带指引弹奏（0x94 / 0x95，v0.6） ----------------
+// 语义（FPGA 侧 rtl/ble_cmd.v + rtl/guide_ctrl.v）：
+//   - 0x94 用「已下发且 0x92 校验通过」的曲谱开始指引：目标音灯亮黄；
+//     按对→该灯绿并保持到松开；松开→下一个音黄；按错→红 0.5s 后回黄；
+//     休止符自动跳过；曲末自动结束。
+//   - 没有有效曲谱时 0x94 被拒（NACK 码 4），所以页面必须先「下发成功」。
+//   - 灯带只有 24 颗，对应 MIDI 60~83（C4~B5）；超出范围的音不亮灯但流程照走。
+//   - 0x84 自动演奏 / 0x90 重新下发 / 0x93 复位 都会让 FPGA 侧退出指引，本端要同步清状态。
+function encodeGuideStart() { return frame(CMD.GUIDE_START) }
+function encodeGuideStop()  { return frame(CMD.GUIDE_STOP) }
 
 // v: 0/1（其它真值一律规范化为 1，非真值一律 0）→ 0x86 + 1 数据字节
 function encodeTimbre(v) { return frame(CMD.TIMBRE_SET, [v ? 1 : 0]) }
@@ -462,6 +478,30 @@ function selfTest() {
     if (r[1].desc !== '滑音 → 64/127（越大滑得越慢）') throw new Error('desc=' + r[1].desc)
   })
 
+  // 灯带指引弹奏（0x94 / 0x95，v0.6）：0 数据字节，和相邻 0 数据命令连发也不能串帧
+  check('指引弹奏 0x94 / 停止指引 0x95 编码', function () {
+    eq(encodeGuideStart(), [0x94], 'GUIDE_START')
+    eq(encodeGuideStop(), [0x95], 'GUIDE_STOP')
+  })
+  check('指引 0x94/0x95 decode 往返（与前后 0 数据命令连发）', function () {
+    var dec = createDecoder()
+    var r = dec.pushAll([0x92, 0x94, 0x95, 0x84])
+    if (r.length !== 4) throw new Error('应 4 帧，得到 ' + r.length + ': ' + JSON.stringify(r))
+    if (r[1].cmd !== CMD.GUIDE_START || r[2].cmd !== CMD.GUIDE_STOP) throw new Error('解析错: ' + JSON.stringify(r))
+    if (r[1].unknown) throw new Error('0x94 不应被当作未知命令')
+    if (r[1].data.length || r[2].data.length) throw new Error('0x94/0x95 不该带数据字节')
+    if (r[1].desc !== '指引弹奏开始') throw new Error('desc=' + r[1].desc)
+    if (r[2].desc !== '指引弹奏停止') throw new Error('desc=' + r[2].desc)
+  })
+  check('NACK 码 4 = 未下发曲谱 / 曲谱无效（0x94 被拒，线上 A2 14 04）', function () {
+    if (ackReason(4).indexOf('曲谱') < 0) throw new Error('文案: ' + ackReason(4))
+    var dec = createDecoder()
+    var r = dec.pushAll([0xA2, 0x14, 0x04])
+    if (r.length !== 1) throw new Error('应 1 帧，得到 ' + r.length)
+    if (r[0].desc.indexOf('0x94') < 0) throw new Error('desc 未还原出 0x94: ' + r[0].desc)
+    if (r[0].desc.indexOf('曲谱') < 0) throw new Error('desc 未带原因: ' + r[0].desc)
+  })
+
   // 2. 曲谱帧
   check('曲谱开始 512 条 = 低7位/高7位', function () { eq(encodeSongStart(512), [0x90, 0x00, 0x04], 'SONG_START') })
   check('曲谱开始 130 条', function () { eq(encodeSongStart(130), [0x90, 0x02, 0x01], 'SONG_START130') })
@@ -585,6 +625,8 @@ module.exports = {
   encodePlayStart: encodePlayStart,
   encodePlayStop: encodePlayStop,
   encodePlayReset: encodePlayReset,
+  encodeGuideStart: encodeGuideStart,
+  encodeGuideStop: encodeGuideStop,
   encodeTimbre: encodeTimbre,
   encodeNoteOn: encodeNoteOn,
   encodeNoteOff: encodeNoteOff,
