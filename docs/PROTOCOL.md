@@ -133,7 +133,7 @@ song = { name: string, entries: [{note, vel, dur}] }   // 条目上限 512（FPG
      所以音域偏移拉大了以后可能出现"某些音没灯"——这是设计行为，不是丢帧。
    - RTL：`rtl/ble_cmd.v`（`C_GSTR/C_GSTP` → `guide_start/guide_stop` 单拍脉冲）+ `rtl/guide_ctrl.v`（状态机）。
      ⚠ 已知缺口（2026-11-03 记录，FPGA 侧待接）：`rtl/ack_tx.v` 目前只对 `0x80`/`0x90`/`0x92` 回包，
-     对 `0x94` 静默 ⇒ **NACK 码 4 暂时发不到线上**；且 `guide_ctrl.v` 尚未在 `top_*.v` 里实例化
+     RTL 已接通：`guide_ctrl.v` 已实例化于出货顶层 `lowlat/top_ble_fsr_keys.v`；`ack_tx.v` 已转发 0x94 的失败应答（`A2 14 04`）。其他旧顶层（`top_ble_fsr.v` 等）未接指引，属历史文件。
      （现在顶层挂的还是 `led_guide.v`）。在此之前的兼容做法：小程序以本端 `songValid` 为准，不依赖回包。
 
 ## 6. 小程序侧实现约束
@@ -161,7 +161,7 @@ song = { name: string, entries: [{note, vel, dur}] }   // 条目上限 512（FPG
 | 1 | 条目数不符（`0x92` 时已写入条数 ≠ `0x90` 声明的 N） |
 | 2 | N 超范围（N>512 或 N=0） |
 | 3 | 不在下发期就发了 `0x92` |
-| 4 | 未下发曲谱 / 曲谱无效（`0x94` 指引弹奏要求曲谱已通过 `0x92` 校验；**v0.6** 新增，`ble_cmd.v` 已产生，`ack_tx.v` 尚未转发） |
+| 4 | 未下发曲谱 / 曲谱无效（`0x94` 指引弹奏要求曲谱已通过 `0x92` 校验；**v0.6** 新增，`ble_cmd.v` 产生、`ack_tx.v` 已转发） |
 
 **回哪些命令**（刻意只回有结果意义的）：
 
