@@ -189,7 +189,7 @@ impl\pnr\project.timing_paths  ← 时序报告
 
 ## 6. 协议摘要
 
-完整字节协议：[`docs/PROTOCOL.md`](docs/PROTOCOL.md)（v0.5）。传输层：
+完整字节协议：[`docs/PROTOCOL.md`](docs/PROTOCOL.md)（v0.6）。传输层：
 
 ```
 小程序 ──BLE(FFE1 write)──> HC-04 ──UART 115200 8N1──> FPGA
@@ -208,6 +208,7 @@ impl\pnr\project.timing_paths  ← 时序报告
 | `0x87` / `0x88` | 单音按下 / 松开 | note, vel / note |
 | `0x89` | 混响湿度 | 0 干声 … 127 全湿（默认 32） |
 | `0x8B` | 保留命令（滑音，本版未启用） | — |
+| `0x94` / `0x95` | 灯带指引开始 / 停止 | —（需先 `0x92` 校验通过，否则回 NACK 码 4） |
 | `0x90` / `0x91` / `0x92` | 曲谱开始（N≤512）/ 条目（note,vel,dur）/ 结束 | dur 单位 10 ms |
 | `0xA1` / `0xA2` | 下行 ACK / NACK | 被确认命令的低 7 位（+错误码） |
 
